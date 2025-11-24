@@ -1,0 +1,153 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'chungu424@gmail.com' ||
+        request.auth.token.email == 'emacbean@gmail.com' ||
+        request.auth.token.email == 'chungu@thestackone.com'
+      );
+    }
+
+    // Current user's users/{uid} doc
+    function me() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    // Can requester read the target users/{userId} doc?
+    // Option B: allow a patient to read their therapist's user doc
+    function canReadUser(userId) {
+      // Self can always read, or patient can read therapist's user doc when linked via therapist_id
+      return isSelf(userId) || (isSignedIn() && me().data.therapist_id == userId);
+    }
+
+    // Is requester the therapist of the target patient user doc?
+    function isTherapistOf(userDoc) {
+      return isSignedIn() && userDoc.data.therapist_id == request.auth.uid;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      // Read own doc, patient's therapist doc, therapist can read their patients' docs, or admin
+      allow read: if canReadUser(userId) || isTherapistOf(resource) || isAdmin();
+
+      // Clients create/update/delete only their own user doc
+      allow create: if isSelf(userId);
+      allow update, delete: if isSelf(userId);
+    }
+
+    // Therapists directory profiles
+    match /therapists/{therapistId} {
+      // Visible to signed-in users (patients need to view therapist profile info)
+      allow read: if isSignedIn();
+      // Only the therapist (by user_id) can create or modify their profile from the client
+      // Admin can update therapist profiles (for approvals)
+      allow create: if isSignedIn() && request.resource.data.user_id == request.auth.uid;
+      allow update: if isAdmin() || (isSignedIn() && request.resource.data.user_id == request.auth.uid);
+      allow delete: if isSignedIn() && request.resource.data.user_id == request.auth.uid;
+    }
+
+    // 1:1 Conversations and messages
+    match /conversations/{conversationId} {
+      function isParticipant() {
+        return isSignedIn() && (
+          resource.data.therapist_id == request.auth.uid ||
+          resource.data.patient_id == request.auth.uid
+        );
+      }
+      function isParticipantCreate() {
+        return isSignedIn() && (
+          request.resource.data.therapist_id == request.auth.uid ||
+          request.resource.data.patient_id == request.auth.uid
+        );
+      }
+
+      allow read: if isParticipant() || isAdmin();
+      allow create: if isParticipantCreate();
+      allow update: if isParticipant();
+      // Prevent client-side deletes for safety
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function parent() {
+          return get(/databases/$(database)/documents/conversations/$(conversationId));
+        }
+        function parentHasParticipant() {
+          return isSignedIn() && (
+            parent().data.therapist_id == request.auth.uid ||
+            parent().data.patient_id == request.auth.uid
+          );
+        }
+        allow read: if parentHasParticipant();
+        allow create: if parentHasParticipant() && request.resource.data.sender_id == request.auth.uid;
+        // Disallow client edits/deletes of messages
+        allow update, delete: if false;
+      }
+    }
+
+    // AI conversation summaries
+    match /ai_conversation_summaries/{summaryId} {
+      allow read: if isAdmin() || (isSignedIn() && (
+        resource.data.therapist_id == request.auth.uid ||
+        resource.data.patient_id == request.auth.uid
+      ));
+      allow create: if isSignedIn() && (
+        request.resource.data.therapist_id == request.auth.uid ||
+        request.resource.data.patient_id == request.auth.uid
+      );
+      allow update, delete: if false;
+    }
+
+    // Therapy sessions
+    match /therapy_sessions/{sessionId} {
+      allow read: if isAdmin() || (isSignedIn() && (
+        resource.data.user_id == request.auth.uid ||
+        resource.data.therapist_id == request.auth.uid
+      ));
+      allow create: if isSignedIn() && (
+        request.resource.data.user_id == request.auth.uid ||
+        request.resource.data.therapist_id == request.auth.uid
+      );
+      allow update: if isSignedIn() && (
+        resource.data.user_id == request.auth.uid ||
+        resource.data.therapist_id == request.auth.uid
+      );
+      // Prefer server-driven deletes
+      allow delete: if false;
+    }
+
+    // Voice check-ins metadata (Storage paths are enforced via Storage rules)
+    match /voice_checkins/{checkinId} {
+      allow read: if isAdmin() || (isSignedIn() && (
+        resource.data.patient_id == request.auth.uid ||
+        resource.data.therapist_id == request.auth.uid
+      ));
+      allow create: if isSignedIn() && (
+        request.resource.data.patient_id == request.auth.uid ||
+        request.resource.data.therapist_id == request.auth.uid
+      );
+      // Allow therapist to remove their own shared check-ins
+      allow update, delete: if isSignedIn() && resource.data.therapist_id == request.auth.uid;
+    }
+
+    // Error logs surfaced to therapists (read-only for owner therapist)
+    match /invitation_errors/{docId} {
+      allow read: if isSignedIn() && resource.data.therapistId == request.auth.uid;
+      allow write: if false;
+    }
+
+    // Deny everything else by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

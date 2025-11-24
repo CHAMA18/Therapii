@@ -1,0 +1,90 @@
+{
+  "project_info": {
+    "project_number": "36222842118",
+    "project_id": "therapii-qezlke",
+    "storage_bucket": "therapii-qezlke.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:36222842118:android:d4f8803b1728a276395a87",
+        "android_client_info": {
+          "package_name": "com.mycompany.CounterApp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "36222842118-1oect0jgsh3nmggiddc9hlu119o4er8s.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDusVInRfAFteE1uRY7V5VNtfEG4c-wDos"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "36222842118-1oect0jgsh3nmggiddc9hlu119o4er8s.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "36222842118-3iq7vvk7adsl96m51c2ibpd6872kjes7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mycompany.CounterApp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:36222842118:android:c7ee25da13cbb5bf395a87",
+        "android_client_info": {
+          "package_name": "com.mycompany.therapii"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "36222842118-7ava3m8bpnalpgb7u2ako3afsvlistfa.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mycompany.therapii",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "36222842118-1oect0jgsh3nmggiddc9hlu119o4er8s.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDusVInRfAFteE1uRY7V5VNtfEG4c-wDos"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "36222842118-1oect0jgsh3nmggiddc9hlu119o4er8s.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "36222842118-3iq7vvk7adsl96m51c2ibpd6872kjes7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mycompany.CounterApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

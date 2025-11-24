@@ -1,0 +1,4 @@
+.prompt_attachments
+.dart_tool
+*.hologram.dart
+build/

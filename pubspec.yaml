@@ -1,0 +1,49 @@
+name: therapii
+description: "A new Flutter project."
+publish_to: "none"
+
+version: 1.0.0+2
+
+environment:
+  sdk: ^3.6.0
+dependencies:
+  url_launcher: ^6.0.0
+  http: ^1.0.0
+  font_awesome_flutter: ^10.0.0
+  path_provider: ^2.0.0
+  record: '>=5.1.2'
+  cloud_functions: '>=5.0.0'
+  shimmer: ^3.0.0
+  file_selector: ^1.0.0
+  # file_picker_web removed
+  firebase_storage: ^13.0.0
+  file_picker: '>=8.1.2'
+  just_audio: ^0.10.5
+  tutorial_coach_mark: ^1.0.0
+  shared_preferences: ^2.0.0
+  flutter_tts: ^4.0.0
+  speech_to_text: ^7.0.0
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.1.0
+  firebase_core: ^4.1.1
+  firebase_auth: '>=5.3.3'
+  cloud_firestore: '>=5.5.0'
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/images/Therapii_image.png
+  remove_alpha_ios: true
