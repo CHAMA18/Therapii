@@ -635,6 +635,15 @@ class _DisplayedAiMessage {
 
 extension _SpeechActions on _AiTherapistChatPageState {
   Future<void> _initSpeech() async {
+    // Disable Speech-to-Text on web to avoid runtime errors from the Web Speech API
+    // in hot-restart environments (Bad state: Cannot add new events after calling close)
+    if (kIsWeb) {
+      if (mounted) {
+        setState(() => _speechAvailable = false);
+      }
+      return;
+    }
+
     try {
       final available = await _speechToText.initialize(
         onError: (error) {
@@ -661,6 +670,15 @@ extension _SpeechActions on _AiTherapistChatPageState {
   }
 
   Future<void> _toggleListening() async {
+    if (kIsWeb) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Voice input is not available on web in this build.')),
+        );
+      }
+      return;
+    }
+
     if (_isListening) {
       await _speechToText.stop();
       setState(() => _isListening = false);

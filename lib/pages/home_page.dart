@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as FirebaseAuth;
 import 'package:therapii/auth/firebase_auth_manager.dart';
@@ -13,6 +14,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final FirebaseAuthManager _authManager = FirebaseAuthManager();
   FirebaseAuth.User? _currentUser;
+  StreamSubscription<FirebaseAuth.User?>? _authSub;
 
   @override
   void initState() {
@@ -20,7 +22,7 @@ class _HomePageState extends State<HomePage> {
     _currentUser = _authManager.currentUser;
     
     // Listen to auth state changes
-    _authManager.authStateChanges.listen((user) {
+    _authSub = _authManager.authStateChanges.listen((user) {
       if (mounted) {
         setState(() {
           _currentUser = user;
@@ -34,6 +36,12 @@ class _HomePageState extends State<HomePage> {
         }
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _signOut() async {
