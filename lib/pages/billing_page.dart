@@ -1,12 +1,123 @@
 import 'dart:ui';
 
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:therapii/theme.dart';
 import 'package:therapii/widgets/primary_button.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Elevated billing hub with premium visuals and clear actions.
-class BillingPage extends StatelessWidget {
+class BillingPage extends StatefulWidget {
   const BillingPage({super.key});
+
+  @override
+  State<BillingPage> createState() => _BillingPageState();
+}
+
+class _BillingPageState extends State<BillingPage> {
+  List<_Invoice> _invoices = [];
+  bool _isLoadingInvoices = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchInvoices();
+  }
+
+  Future<void> _fetchInvoices() async {
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable('getStripeInvoices');
+      final result = await callable.call();
+      
+      final invoicesData = result.data['invoices'] as List<dynamic>? ?? [];
+      final fetchedInvoices = invoicesData.map((invoice) {
+        return _Invoice(
+          id: invoice['id'] as String? ?? '',
+          amount: (invoice['amount'] as num?)?.toDouble() ?? 0.0,
+          issuedAt: DateTime.tryParse(invoice['issuedAt'] as String? ?? '') ?? DateTime.now(),
+          status: _InvoiceStatus.paid,
+          invoiceUrl: invoice['invoiceUrl'] as String?,
+        );
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _invoices = fetchedInvoices;
+          _isLoadingInvoices = false;
+        });
+      }
+    } catch (error) {
+      debugPrint('Error fetching invoices: $error');
+      if (mounted) {
+        setState(() {
+          _invoices = [];
+          _isLoadingInvoices = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleChangePlan(BuildContext context) async {
+    try {
+      // Show loading indicator
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Opening Stripe Checkout...')),
+      );
+
+      // Call Cloud Function to create Checkout Session
+      final callable = FirebaseFunctions.instance.httpsCallable('createStripeCheckoutSession');
+      
+      // Get current URL for success/cancel redirects
+      final baseUrl = kIsWeb ? Uri.base.toString().replaceAll(RegExp(r'[?#].*'), '') : 'https://therapii.app';
+      
+      final result = await callable.call({
+        'priceId': 'price_1SOt2aL9fA3Th1kO32maIqxk',
+        'successUrl': '$baseUrl/billing?success=true',
+        'cancelUrl': '$baseUrl/billing?cancelled=true',
+      });
+
+      final checkoutUrl = result.data['url'] as String?;
+      if (checkoutUrl == null || checkoutUrl.isEmpty) {
+        throw Exception('No checkout URL returned');
+      }
+
+      // Open Stripe Checkout in browser
+      final uri = Uri.parse(checkoutUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        throw Exception('Could not launch checkout URL');
+      }
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Firebase Functions error: ${e.code} - ${e.message}');
+      debugPrint('Details: ${e.details}');
+      
+      if (!context.mounted) return;
+      
+      // Provide specific error messages
+      String errorMessage;
+      if (e.code == 'not-found' || e.code == 'internal') {
+        errorMessage = 'Cloud Functions not deployed yet.\n\nPlease deploy functions first:\n1. Download project code\n2. Run: firebase deploy --only functions';
+      } else {
+        errorMessage = 'Error: ${e.message ?? e.code}';
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    } catch (error) {
+      debugPrint('Error creating checkout session: $error');
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to open checkout: ${error.toString()}')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,8 +150,6 @@ class BillingPage extends StatelessWidget {
         accent: scheme.tertiary,
       ),
     ];
-
-    final invoices = _buildSampleInvoices();
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -77,11 +186,21 @@ class BillingPage extends StatelessWidget {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-                    child: _HeroCard(
-                      planName: 'Therapii Premium',
-                      priceLabel: '\$189 / month',
-                      highlights: const ['Unlimited chat', 'AI voice concierge', 'Analytics vault'],
-                      nextBilling: nextBilling,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 520),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, v, child) => Transform.translate(
+                        offset: Offset(0, (1 - v) * 24),
+                        child: Opacity(opacity: v, child: child),
+                      ),
+                      child: _HeroCard(
+                        planName: 'Therapii Premium',
+                        priceLabel: '\$189 / month',
+                        highlights: const ['Unlimited chat', 'AI voice concierge', 'Analytics vault'],
+                        nextBilling: nextBilling,
+                        onChangePlan: () => _handleChangePlan(context),
+                      ),
                     ),
                   ),
                 ),
@@ -111,8 +230,13 @@ class BillingPage extends StatelessWidget {
                           );
                         },
                       ),
-                      const SizedBox(height: 28),
-                      _InvoiceHistory(invoices: invoices),
+                      if (_isLoadingInvoices) ...[
+                        const SizedBox(height: 28),
+                        const Center(child: CircularProgressIndicator()),
+                      ] else if (_invoices.isNotEmpty) ...[
+                        const SizedBox(height: 28),
+                        _InvoiceHistory(invoices: _invoices),
+                      ],
                       const SizedBox(height: 40),
                     ]),
                   ),
@@ -131,7 +255,6 @@ class _BackdropOrbs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.onPrimary;
     return Stack(
       children: const [
         _FrostedOrb(size: 190, opacity: 0.16, alignment: Alignment(1.1, -1.1)),
@@ -150,7 +273,7 @@ class _FrostedOrb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.onPrimary.withOpacity(opacity);
+    final color = Theme.of(context).colorScheme.onPrimary.withValues(alpha: opacity);
     return Align(
       alignment: alignment,
       child: Container(
@@ -171,12 +294,14 @@ class _HeroCard extends StatelessWidget {
   final String priceLabel;
   final List<String> highlights;
   final String nextBilling;
+  final VoidCallback onChangePlan;
 
   const _HeroCard({
     required this.planName,
     required this.priceLabel,
     required this.highlights,
     required this.nextBilling,
+    required this.onChangePlan,
   });
 
   @override
@@ -189,7 +314,7 @@ class _HeroCard extends StatelessWidget {
         color: scheme.surface,
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
-          BoxShadow(color: scheme.primary.withOpacity(0.08), blurRadius: 42, offset: const Offset(0, 26)),
+          BoxShadow(color: scheme.primary.withValues(alpha: 0.08), blurRadius: 42, offset: const Offset(0, 26)),
         ],
       ),
       padding: const EdgeInsets.all(26),
@@ -199,7 +324,7 @@ class _HeroCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: scheme.primary.withOpacity(0.16),
+              color: scheme.primary.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(18),
             ),
             child: Row(
@@ -241,7 +366,7 @@ class _HeroCard extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Text(
                     'Next billing on $nextBilling',
-                    style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface.withOpacity(0.65)),
+                    style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface.withValues(alpha: 0.65)),
                   ),
                 ),
               ),
@@ -257,8 +382,8 @@ class _HeroCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(18),
-                    color: scheme.primary.withOpacity(0.12),
-                    border: Border.all(color: scheme.primary.withOpacity(0.22)),
+                    color: scheme.primary.withValues(alpha: 0.12),
+                    border: Border.all(color: scheme.primary.withValues(alpha: 0.22)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -285,11 +410,7 @@ class _HeroCard extends StatelessWidget {
                   label: 'Change plan',
                   leadingIcon: Icons.swap_horiz_rounded,
                   uppercase: false,
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Plan management will be available soon.')),
-                    );
-                  },
+                  onPressed: onChangePlan,
                 ),
               ),
               const SizedBox(width: 14),
@@ -382,9 +503,9 @@ class _MetricTile extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         color: scheme.surface,
-        border: Border.all(color: scheme.outline.withOpacity(0.12)),
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.12)),
         boxShadow: [
-          BoxShadow(color: metric.accent.withOpacity(0.12), blurRadius: 30, offset: const Offset(0, 20)),
+          BoxShadow(color: metric.accent.withValues(alpha: 0.12), blurRadius: 30, offset: const Offset(0, 20)),
         ],
       ),
       child: Column(
@@ -395,7 +516,7 @@ class _MetricTile extends StatelessWidget {
             width: 46,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              color: metric.accent.withOpacity(0.14),
+              color: metric.accent.withValues(alpha: 0.14),
             ),
             child: Icon(metric.icon, color: metric.accent),
           ),
@@ -414,7 +535,7 @@ class _MetricTile extends StatelessWidget {
           Text(
             metric.detail,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: scheme.onSurface.withOpacity(0.65),
+              color: scheme.onSurface.withValues(alpha: 0.65),
               height: 1.45,
             ),
           ),
@@ -437,7 +558,7 @@ class _PaymentMethodCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         color: scheme.surface,
-        boxShadow: [BoxShadow(color: scheme.primary.withOpacity(0.07), blurRadius: 34, offset: const Offset(0, 22))],
+        boxShadow: [BoxShadow(color: scheme.primary.withValues(alpha: 0.07), blurRadius: 34, offset: const Offset(0, 22))],
       ),
       padding: const EdgeInsets.all(26),
       child: Column(
@@ -467,7 +588,7 @@ class _PaymentMethodCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       'Card ending •• 4242 · Expires 08/27 · Auto-renew enabled',
-                      style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface.withOpacity(0.65)),
+                      style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface.withValues(alpha: 0.65)),
                     ),
                   ],
                 ),
@@ -500,7 +621,7 @@ class _CreditActionsCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         color: scheme.surface,
-        boxShadow: [BoxShadow(color: scheme.primary.withOpacity(0.05), blurRadius: 32, offset: const Offset(0, 20))],
+        boxShadow: [BoxShadow(color: scheme.primary.withValues(alpha: 0.05), blurRadius: 32, offset: const Offset(0, 20))],
       ),
       padding: const EdgeInsets.all(26),
       child: Column(
@@ -513,7 +634,7 @@ class _CreditActionsCard extends StatelessWidget {
                 width: 54,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
-                  color: scheme.tertiary.withOpacity(0.18),
+                  color: scheme.tertiary.withValues(alpha: 0.18),
                 ),
                 child: Icon(Icons.card_giftcard_rounded, color: scheme.tertiary),
               ),
@@ -526,7 +647,7 @@ class _CreditActionsCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       'Apply concierge credits or corporate stipends to reduce upcoming invoices.',
-                      style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface.withOpacity(0.65), height: 1.5),
+                      style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface.withValues(alpha: 0.65), height: 1.5),
                     ),
                   ],
                 ),
@@ -600,7 +721,7 @@ class _InvoiceHistory extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         color: scheme.surface,
-        boxShadow: [BoxShadow(color: scheme.primary.withOpacity(0.05), blurRadius: 32, offset: const Offset(0, 20))],
+        boxShadow: [BoxShadow(color: scheme.primary.withValues(alpha: 0.05), blurRadius: 32, offset: const Offset(0, 20))],
       ),
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
       child: Column(
@@ -610,7 +731,7 @@ class _InvoiceHistory extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             'Download detailed receipts or share them with your care team.',
-            style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface.withOpacity(0.65)),
+            style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface.withValues(alpha: 0.65)),
           ),
           const SizedBox(height: 20),
           for (final invoice in invoices)
@@ -621,16 +742,38 @@ class _InvoiceHistory extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(20),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Invoice ${invoice.id} download coming soon.')),
-                    );
+                  onTap: () async {
+                    if (invoice.invoiceUrl != null && invoice.invoiceUrl!.isNotEmpty) {
+                      try {
+                        final uri = Uri.parse(invoice.invoiceUrl!);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        } else {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Could not open invoice PDF.')),
+                            );
+                          }
+                        }
+                      } catch (error) {
+                        debugPrint('Error opening invoice: $error');
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error: ${error.toString()}')),
+                          );
+                        }
+                      }
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Invoice PDF not available.')),
+                      );
+                    }
                   },
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: scheme.outline.withOpacity(0.12)),
+                        border: Border.all(color: scheme.outline.withValues(alpha: 0.12)),
                       ),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
@@ -660,7 +803,7 @@ class _InvoiceHistory extends StatelessWidget {
                                 height: 48,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(16),
-                                  color: _statusColor(context, invoice.status).withOpacity(0.12),
+                                  color: _statusColor(context, invoice.status).withValues(alpha: 0.12),
                                 ),
                                 child: Icon(
                                   invoice.status == _InvoiceStatus.paid
@@ -690,7 +833,7 @@ class _InvoiceHistory extends StatelessWidget {
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                           decoration: BoxDecoration(
-                                            color: _statusColor(context, invoice.status).withOpacity(0.15),
+                                            color: _statusColor(context, invoice.status).withValues(alpha: 0.15),
                                             borderRadius: BorderRadius.circular(999),
                                           ),
                                           child: Text(
@@ -706,7 +849,7 @@ class _InvoiceHistory extends StatelessWidget {
                                     const SizedBox(height: 6),
                                     Text(
                                       localizations.formatMediumDate(invoice.issuedAt),
-                                      style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface.withOpacity(0.6)),
+                                      style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface.withValues(alpha: 0.6)),
                                     ),
                                   ],
                                 ),
@@ -749,37 +892,15 @@ class _Invoice {
   final double amount;
   final DateTime issuedAt;
   final _InvoiceStatus status;
+  final String? invoiceUrl;
 
   const _Invoice({
     required this.id,
     required this.amount,
     required this.issuedAt,
     required this.status,
+    this.invoiceUrl,
   });
 }
 
 enum _InvoiceStatus { paid, dueSoon, overdue }
-
-List<_Invoice> _buildSampleInvoices() {
-  final now = DateTime.now();
-  return [
-    _Invoice(
-      id: 'INV-1045',
-      amount: 189,
-      issuedAt: now.subtract(const Duration(days: 11)),
-      status: _InvoiceStatus.paid,
-    ),
-    _Invoice(
-      id: 'INV-1044',
-      amount: 189,
-      issuedAt: now.subtract(const Duration(days: 41)),
-      status: _InvoiceStatus.paid,
-    ),
-    _Invoice(
-      id: 'INV-1043',
-      amount: 189,
-      issuedAt: now.subtract(const Duration(days: 71)),
-      status: _InvoiceStatus.paid,
-    ),
-  ];
-}

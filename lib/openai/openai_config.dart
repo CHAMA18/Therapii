@@ -30,8 +30,8 @@ class AiCompanionClient {
 
   Future<String> sendChat({
     required List<AiChatMessage> messages,
-    String model = 'gpt-4o-mini',
-    int maxOutputTokens = 800,
+    String model = 'gpt-4o',
+    int maxOutputTokens = 2000,
     bool preferChatCompletions = false,
   }) async {
     final buffer = StringBuffer();
@@ -53,8 +53,8 @@ class AiCompanionClient {
 
   Stream<String> sendChatStream({
     required List<AiChatMessage> messages,
-    String model = 'gpt-4o-mini',
-    int maxOutputTokens = 800,
+    String model = 'gpt-4o',
+    int maxOutputTokens = 2000,
     bool preferChatCompletions = false,
   }) async* {
     if (messages.isEmpty) {

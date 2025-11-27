@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:therapii/data/universities.dart';
@@ -95,6 +97,9 @@ class TherapistDetailsPage extends StatefulWidget {
 }
 
 class _TherapistDetailsPageState extends State<TherapistDetailsPage> {
+  int _currentPage = 0;
+  final PageController _pageController = PageController();
+
   final TextEditingController _nameCtrl = TextEditingController();
   final TextEditingController _practiceCtrl = TextEditingController();
   final TextEditingController _cityCtrl = TextEditingController();
@@ -102,6 +107,14 @@ class _TherapistDetailsPageState extends State<TherapistDetailsPage> {
   final TextEditingController _zipCtrl = TextEditingController();
   final TextEditingController _emailCtrl = TextEditingController();
   final TextEditingController _phoneCtrl = TextEditingController();
+
+  String? _profilePhotoUrl;
+  String? _qualificationUrl;
+  String? _idPhotoUrl;
+
+  bool _isUploadingProfile = false;
+  bool _isUploadingQualification = false;
+  bool _isUploadingId = false;
 
   final List<String> _stateLicensures = [];
   final List<EducationEntry> _educations = [];
@@ -142,6 +155,11 @@ class _TherapistDetailsPageState extends State<TherapistDetailsPage> {
         _zipCtrl.text = (data['zip_code'] ?? '').toString();
         _emailCtrl.text = (data['contact_email'] ?? '').toString();
         _phoneCtrl.text = (data['contact_phone'] ?? '').toString();
+        
+        _profilePhotoUrl = data['profile_photo_url'] as String?;
+        _qualificationUrl = data['qualification_file_url'] as String?;
+        _idPhotoUrl = data['id_photo_url'] as String?;
+
         _stateLicensures
           ..clear()
           ..addAll(List<String>.from(data['state_licensures'] ?? const <String>[]));
@@ -163,6 +181,25 @@ class _TherapistDetailsPageState extends State<TherapistDetailsPage> {
       return;
     }
 
+    if (_profilePhotoUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please upload a profile photo.')),
+      );
+      return;
+    }
+    if (_qualificationUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please upload your qualification document.')),
+      );
+      return;
+    }
+    if (_idPhotoUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please upload a photo of your ID.')),
+      );
+      return;
+    }
+
     final docRef = FirebaseFirestore.instance.collection('therapists').doc(user.uid);
     setState(() => _submitting = true);
     try {
@@ -180,6 +217,9 @@ class _TherapistDetailsPageState extends State<TherapistDetailsPage> {
         'zip_code': _zipCtrl.text.trim(),
         'contact_email': _emailCtrl.text.trim(),
         'contact_phone': _phoneCtrl.text.trim(),
+        'profile_photo_url': _profilePhotoUrl,
+        'qualification_file_url': _qualificationUrl,
+        'id_photo_url': _idPhotoUrl,
         'state_licensures': _stateLicensures,
         'educations': educationSummaries,
         'education_entries': educationEntries,
@@ -682,6 +722,151 @@ class _TherapistDetailsPageState extends State<TherapistDetailsPage> {
     );
   }
 
+  Future<void> _pickAndUpload(String type) async {
+    final user = firebase_auth.FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    setState(() {
+      if (type == 'profile') _isUploadingProfile = true;
+      if (type == 'qualification') _isUploadingQualification = true;
+      if (type == 'id') _isUploadingId = true;
+    });
+
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: type == 'qualification' ? FileType.any : FileType.image,
+        allowMultiple: false,
+        withData: true,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        final bytes = file.bytes;
+        final name = file.name;
+
+        if (bytes != null) {
+          final ref = FirebaseStorage.instance
+              .ref()
+              .child('therapists/${user.uid}/uploads/${DateTime.now().millisecondsSinceEpoch}_$name');
+          
+          final metadata = SettableMetadata(contentType: type == 'qualification' ? null : 'image/jpeg');
+          
+          final task = await ref.putData(bytes, metadata);
+          final url = await task.ref.getDownloadURL();
+
+          setState(() {
+            if (type == 'profile') _profilePhotoUrl = url;
+            if (type == 'qualification') _qualificationUrl = url;
+            if (type == 'id') _idPhotoUrl = url;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Upload error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          if (type == 'profile') _isUploadingProfile = false;
+          if (type == 'qualification') _isUploadingQualification = false;
+          if (type == 'id') _isUploadingId = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildUploadSection({
+    required String title,
+    required String? url,
+    required bool isLoading,
+    required VoidCallback onUpload,
+    required IconData icon,
+    String? subtitle,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final hasFile = url != null && url.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+        if (subtitle != null) ...[
+          const SizedBox(height: 4),
+          Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurface.withValues(alpha: 0.6))),
+        ],
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: isLoading ? null : onUpload,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: hasFile ? colorScheme.primary : colorScheme.outline.withValues(alpha: 0.3),
+                width: hasFile ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: hasFile ? colorScheme.primary.withValues(alpha: 0.1) : colorScheme.surfaceContainerHighest,
+                    shape: BoxShape.circle,
+                  ),
+                  child: isLoading
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: colorScheme.primary),
+                        )
+                      : Icon(
+                          hasFile ? Icons.check : icon,
+                          color: hasFile ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                          size: 20,
+                        ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        hasFile ? 'File Uploaded' : 'Tap to upload',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: hasFile ? FontWeight.w600 : FontWeight.w500,
+                          color: hasFile ? colorScheme.primary : colorScheme.onSurface,
+                        ),
+                      ),
+                      if (hasFile)
+                        Text(
+                          'Click to replace',
+                          style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                    ],
+                  ),
+                ),
+                if (hasFile && (title.contains('Photo') || title.contains('ID'))) ...[
+                   ClipRRect(
+                     borderRadius: BorderRadius.circular(4),
+                     child: Image.network(url, width: 40, height: 40, fit: BoxFit.cover),
+                   ),
+                ]
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildInputField({
     required TextEditingController controller,
     required String hintText,
@@ -903,6 +1088,33 @@ class _TherapistDetailsPageState extends State<TherapistDetailsPage> {
                   _buildInputField(controller: _emailCtrl, hintText: 'Email Address', keyboardType: TextInputType.emailAddress),
                   const SizedBox(height: 16),
                   _buildInputField(controller: _phoneCtrl, hintText: 'Phone Number', keyboardType: TextInputType.phone),
+                  const SizedBox(height: 24),
+                  _buildUploadSection(
+                    title: 'Profile Photo',
+                    subtitle: 'Upload a clear photo of yourself.',
+                    url: _profilePhotoUrl,
+                    isLoading: _isUploadingProfile,
+                    onUpload: () => _pickAndUpload('profile'),
+                    icon: Icons.person_outline,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildUploadSection(
+                    title: 'Qualification Document',
+                    subtitle: 'Upload a copy of your degree or certificate.',
+                    url: _qualificationUrl,
+                    isLoading: _isUploadingQualification,
+                    onUpload: () => _pickAndUpload('qualification'),
+                    icon: Icons.school_outlined,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildUploadSection(
+                    title: 'Government ID',
+                    subtitle: 'Upload a photo of your ID (Passport, License, etc).',
+                    url: _idPhotoUrl,
+                    isLoading: _isUploadingId,
+                    onUpload: () => _pickAndUpload('id'),
+                    icon: Icons.badge_outlined,
+                  ),
                   const SizedBox(height: 28),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,

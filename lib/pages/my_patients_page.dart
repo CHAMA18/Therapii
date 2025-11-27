@@ -24,6 +24,7 @@ import 'package:therapii/services/voice_checkin_service.dart';
 import 'package:therapii/models/voice_checkin.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:therapii/widgets/therapist_approval_gate.dart';
+import 'package:therapii/widgets/dashboard_action_card.dart';
 
 enum TopNavSection { patients, listen }
 
@@ -52,6 +53,7 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
   DateTime? _approvalRequestedAt;
   bool _checkingApproval = false;
   bool _signingOut = false;
+  AppUser.User? _therapist;
 
   String _truncate(String text, {int max = 60}) {
     if (text.length <= max) return text;
@@ -409,11 +411,18 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
               therapistData['created_at'] as Timestamp?)
           ?.toDate();
 
+      // Load therapist user for greeting/header
+      AppUser.User? therapistUser;
+      try {
+        therapistUser = await _userService.getUser(therapistId);
+      } catch (_) {}
+
       if (!mounted) return;
       setState(() {
         _therapistId = therapistId;
         _approvalStatus = status;
         _approvalRequestedAt = timestamp;
+        _therapist = therapistUser;
       });
 
       if (status != 'approved') {
@@ -497,199 +506,257 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
         _showAllPatients || !hasMorePatients ? _activePatients : _activePatients.take(maxVisiblePatients).toList();
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor: theme.colorScheme.surface,
+      appBar: AppBar(
+        title: const Text('My Patients'),
+        centerTitle: true,
+        scrolledUnderElevation: 0,
+        backgroundColor: Colors.transparent,
+      ),
       drawer: const CommonSettingsDrawer(),
       body: SafeArea(
-        child: Builder(
-          builder: (innerContext) {
-            if (!_loading) {
-              final status = (_approvalStatus ?? '').toLowerCase();
-              if (status.isNotEmpty && status != 'approved') {
-                return TherapistApprovalGate(
-                  status: _approvalStatus ?? 'pending',
-                  requestedAt: _approvalRequestedAt,
-                  refreshing: _checkingApproval,
-                  signingOut: _signingOut,
-                  onRefresh: _refreshApprovalStatus,
-                  onUpdateProfile: _openTherapistProfileEditor,
-                  onSignOut: _signOut,
-                );
-              }
+        child: Builder(builder: (innerContext) {
+          if (!_loading) {
+            final status = (_approvalStatus ?? '').toLowerCase();
+            if (status.isNotEmpty && status != 'approved') {
+              return TherapistApprovalGate(
+                status: _approvalStatus ?? 'pending',
+                requestedAt: _approvalRequestedAt,
+                refreshing: _checkingApproval,
+                signingOut: _signingOut,
+                onRefresh: _refreshApprovalStatus,
+                onUpdateProfile: _openTherapistProfileEditor,
+                onSignOut: _signOut,
+              );
             }
+          }
 
-            return Stack(
-              children: [
-                SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 520),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                        _TopNav(
-                          selected: _selected,
-                          onMenuTap: () => Scaffold.of(innerContext).openDrawer(),
-                          onPatientsTap: () => setState(() => _selected = TopNavSection.patients),
-                          onListenTap: () => Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(builder: (_) => const ListenPage()),
-                          ),
-                        ),
-                          const SizedBox(height: 16),
-                        Text(
-                          'My Patients',
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: theme.colorScheme.onSurface,
-                              ),
-                        ),
-                          const SizedBox(height: 8),
-                        Text(
-                          'Below is a list of all your active patients. Click the name of anyone to see more detail, or click the New Patient button to invite someone new.',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurface.withOpacity(0.7),
-                                height: 1.35,
-                              ),
-                        ),
-                          const SizedBox(height: 16),
-                          Row(
+          return RefreshIndicator.adaptive(
+            onRefresh: _loadData,
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 800),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Greeting Header
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8, bottom: 28),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Active patients',
-                              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            const Spacer(),
-                            TextButton(
-                              onPressed: () => Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const NewPatientInfoPage()),
-                              ),
-                              style: TextButton.styleFrom(
-                                foregroundColor: theme.colorScheme.primary,
-                                padding: EdgeInsets.zero,
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: const Text('Invite New'),
-                            ),
-                          ],
-                        ),
-                          const SizedBox(height: 8),
-                          if (_loading) ...[
-                            const SizedBox(height: 8),
-                            Column(
-                              children: [
-                                for (int i = 0; i < 3; i++) ...[
-                                  const ShimmerListTile(),
-                                  const SizedBox(height: 12),
-                                ],
-                                const SizedBox(height: 20),
-                                Row(
-                                  children: [
-                                    Text(
-                                      'Invitations sent',
-                                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                                    ),
-                                    const Spacer(),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                for (int i = 0; i < 2; i++) ...[
-                                  const ShimmerInviteTile(),
-                                  const SizedBox(height: 12),
-                                ],
-                              ],
-                            ),
-                          ] else if (_error != null) ...[
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.errorContainer,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                _error!,
-                                style: TextStyle(color: theme.colorScheme.onErrorContainer),
-                              ),
-                            ),
-                          ] else ...[
-                            const SizedBox(height: 8),
-                            if (_activePatients.isEmpty)
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.surface,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
-                                ),
-                                child: Text(
-                                  'No active patients yet.',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                        color: theme.colorScheme.onSurface.withOpacity(0.7),
-                                      ),
-                                ),
-                              )
-                            else
-                              Column(
+                            Expanded(
+                              child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  for (final u in patientsToDisplay) ...[
-                                    _buildPatientTile(u),
-                                    const SizedBox(height: 12),
-                                  ],
-                                  if (hasMorePatients && !_showAllPatients)
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: TextButton(
-                                        onPressed: () => setState(() => _showAllPatients = true),
-                                        style: TextButton.styleFrom(
-                                          padding: EdgeInsets.zero,
-                                          minimumSize: Size.zero,
-                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                          textStyle: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                                        ),
-                                        child: const Text('See All'),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            const SizedBox(height: 24),
-                            if (_pendingInvites.isNotEmpty) ...[
-                              Row(
-                                children: [
                                   Text(
-                                    'Invitations sent',
-                                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                                  ),
-                                  const Spacer(),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Column(
-                                children: [
-                                  for (final inv in _pendingInvites) ...[
-                                    _InviteTile(
-                                      invitation: inv,
-                                      onDelete: () => _confirmAndDelete(inv),
+                                    _greeting() + ',',
+                                    style: theme.textTheme.headlineMedium?.copyWith(
+                                      color: theme.colorScheme.onSurface,
+                                      fontWeight: FontWeight.w400,
                                     ),
-                                    const SizedBox(height: 12),
-                                  ],
+                                  ),
+                                  Text(
+                                    _therapist?.firstName.isNotEmpty == true
+                                        ? _therapist!.firstName
+                                        : (_therapist?.fullName.isNotEmpty == true
+                                            ? _therapist!.fullName
+                                            : 'there'),
+                                    style: theme.textTheme.displaySmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: theme.colorScheme.onSurface,
+                                      height: 1.1,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Manage your patients, invites and conversations.',
+                                    style: theme.textTheme.bodyLarge?.copyWith(
+                                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
                                 ],
                               ),
-                            ],
+                            ),
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primaryContainer,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  (_therapist?.firstName ?? 'T').isNotEmpty
+                                      ? (_therapist?.firstName ?? 'T')[0].toUpperCase()
+                                      : 'T',
+                                  style: theme.textTheme.titleLarge?.copyWith(
+                                    color: theme.colorScheme.onPrimaryContainer,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
-                          const SizedBox(height: 48),
+                        ),
+                      ),
+
+                      // Action Cards like Patient Dashboard
+                      LayoutBuilder(builder: (context, constraints) {
+                        final isWide = constraints.maxWidth > 600;
+                        final gap = isWide ? 24.0 : 20.0;
+                        final inviteCard = DashboardActionCard(
+                          title: 'Invite New Patient',
+                          subtitle: 'Share a code to connect',
+                          icon: Icons.person_add_alt_1_rounded,
+                          isPrimary: true,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const NewPatientInfoPage()),
+                          ),
+                        );
+                        final listenCard = DashboardActionCard(
+                          title: 'Listen',
+                          subtitle: 'AI summaries, transcripts and voice updates',
+                          icon: Icons.graphic_eq_rounded,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const ListenPage()),
+                          ),
+                        );
+
+                        return isWide
+                            ? Row(children: [Expanded(child: inviteCard), SizedBox(width: gap), Expanded(child: listenCard)])
+                            : Column(children: [inviteCard, SizedBox(height: gap), listenCard]);
+                      }),
+
+                      const SizedBox(height: 28),
+
+                      // Active patients header
+                      Row(
+                        children: [
+                          Text('Active patients', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const NewPatientInfoPage()),
+                            ),
+                            style: TextButton.styleFrom(
+                              foregroundColor: theme.colorScheme.primary,
+                              padding: EdgeInsets.zero,
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text('Invite New'),
+                          ),
                         ],
                       ),
-                    ),
+                      const SizedBox(height: 8),
+
+                      if (_loading) ...[
+                        const SizedBox(height: 8),
+                        Column(children: [
+                          for (int i = 0; i < 3; i++) ...[
+                            const ShimmerListTile(),
+                            const SizedBox(height: 12),
+                          ],
+                          const SizedBox(height: 20),
+                          Row(children: [
+                            Text('Invitations sent', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                            const Spacer(),
+                          ]),
+                          const SizedBox(height: 8),
+                          for (int i = 0; i < 2; i++) ...[
+                            const ShimmerInviteTile(),
+                            const SizedBox(height: 12),
+                          ],
+                        ]),
+                      ] else if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.errorContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(_error!, style: TextStyle(color: theme.colorScheme.onErrorContainer)),
+                        ),
+                      ] else ...[
+                        const SizedBox(height: 8),
+                        if (_activePatients.isEmpty)
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
+                            ),
+                            child: Text(
+                              'No active patients yet.',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurface.withOpacity(0.7)),
+                            ),
+                          )
+                        else
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (final u in patientsToDisplay) ...[
+                                _buildPatientTile(u),
+                                const SizedBox(height: 12),
+                              ],
+                              if (hasMorePatients && !_showAllPatients)
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: TextButton(
+                                    onPressed: () => setState(() => _showAllPatients = true),
+                                    style: TextButton.styleFrom(
+                                      padding: EdgeInsets.zero,
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      textStyle:
+                                          theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                                    ),
+                                    child: const Text('See All'),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        const SizedBox(height: 24),
+                        if (_pendingInvites.isNotEmpty) ...[
+                          Row(children: [
+                            Text('Invitations sent',
+                                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                            const Spacer(),
+                          ]),
+                          const SizedBox(height: 8),
+                          Column(children: [
+                            for (final inv in _pendingInvites) ...[
+                              _InviteTile(invitation: inv, onDelete: () => _confirmAndDelete(inv)),
+                              const SizedBox(height: 12),
+                            ],
+                          ]),
+                        ],
+                      ],
+                      const SizedBox(height: 40),
+                    ],
                   ),
                 ),
-              ],
-            );
-          },
-        ),
+              ),
+            ),
+          );
+        }),
       ),
     );
+  }
+
+  String _greeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
   }
 }
 

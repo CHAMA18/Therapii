@@ -109,7 +109,7 @@ class _TherapistApprovalsPageState extends State<TherapistApprovalsPage> {
                     children: licensure
                         .map((item) => Chip(
                               label: Text(item),
-                              backgroundColor: theme.colorScheme.surfaceVariant,
+                              backgroundColor: theme.colorScheme.surfaceContainerHighest,
                             ))
                         .toList(),
                   ),
@@ -154,105 +154,146 @@ class _TherapistApprovalsPageState extends State<TherapistApprovalsPage> {
     );
   }
 
+  Future<void> _refreshData() async {
+    // The StreamBuilder already listens to real-time updates
+    // This just provides visual feedback
+    await Future.delayed(const Duration(milliseconds: 500));
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Therapist Approvals'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final showLabels = constraints.maxWidth > 400;
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SegmentedButton<String>(
-                    segments: [
-                      ButtonSegment(
-                        value: 'all',
-                        label: Text('All'),
-                        icon: showLabels ? const Icon(Icons.list) : null,
+        title: const Text('Therapist Approvals', style: TextStyle(fontWeight: FontWeight.w600)),
+        centerTitle: true,
+      ),
+      body: Column(
+        children: [
+          Container(
+            color: theme.colorScheme.surface,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: _buildCustomSegmentedControl(theme),
+          ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: _firestore.collection('therapists').snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return _errorState(theme, 'Unable to load therapist submissions. ${snapshot.error}');
+                }
+                final docs = snapshot.data?.docs ?? [];
+                final filtered = docs.where((doc) {
+                  final status = (doc.data()['approval_status'] as String?)?.toLowerCase();
+                  if (_filter == 'all') return true;
+                  if (_filter == 'pending') {
+                    return status == null || status == 'pending' || status == 'resubmitted' || status == 'needs_review';
+                  }
+                  return status == _filter;
+                }).toList()
+                  ..sort((a, b) {
+                    final aTs = a.data()['approval_requested_at'] as Timestamp? ?? a.data()['created_at'] as Timestamp?;
+                    final bTs = b.data()['approval_requested_at'] as Timestamp? ?? b.data()['created_at'] as Timestamp?;
+                    final aDate = aTs?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
+                    final bDate = bTs?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
+                    return bDate.compareTo(aDate);
+                  });
+
+                if (filtered.isEmpty) {
+                  return RefreshIndicator(
+                    onRefresh: _refreshData,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.6,
+                        child: _emptyState(theme),
                       ),
-                      ButtonSegment(
-                        value: 'pending',
-                        label: Text('Pending'),
-                        icon: showLabels ? const Icon(Icons.pending_actions) : null,
-                      ),
-                      ButtonSegment(
-                        value: 'approved',
-                        label: Text('Approved'),
-                        icon: showLabels ? const Icon(Icons.check_circle) : null,
-                      ),
-                      ButtonSegment(
-                        value: 'rejected',
-                        label: Text('Rejected'),
-                        icon: showLabels ? const Icon(Icons.cancel) : null,
-                      ),
-                    ],
-                    selected: {_filter},
-                    onSelectionChanged: (Set<String> selection) {
-                      setState(() => _filter = selection.first);
+                    ),
+                  );
+                }
+
+                return RefreshIndicator(
+                  onRefresh: _refreshData,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 16),
+                    itemBuilder: (context, index) {
+                      final doc = filtered[index];
+                      final data = doc.data();
+                      final status = (data['approval_status'] as String?)?.toLowerCase();
+                      return _TherapistCard(
+                        data: data,
+                        status: status,
+                        onApprove: status == 'approved' ? null : () => _approveTherapist(doc.id),
+                        onReject: status == 'rejected' ? null : () => _rejectTherapist(doc.id),
+                        onViewDetails: () => _showTherapistDetails(data),
+                      );
                     },
                   ),
                 );
               },
             ),
           ),
-        ),
+        ],
       ),
-      body: SafeArea(
-        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: _firestore.collection('therapists').snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
-              return _errorState(theme, 'Unable to load therapist submissions. ${snapshot.error}');
-            }
-            final docs = snapshot.data?.docs ?? [];
-            final filtered = docs.where((doc) {
-              final status = (doc.data()['approval_status'] as String?)?.toLowerCase();
-              if (_filter == 'all') return true;
-              if (_filter == 'pending') {
-                return status == null || status == 'pending' || status == 'resubmitted' || status == 'needs_review';
-              }
-              return status == _filter;
-            }).toList()
-              ..sort((a, b) {
-                final aTs = a.data()['approval_requested_at'] as Timestamp? ?? a.data()['created_at'] as Timestamp?;
-                final bTs = b.data()['approval_requested_at'] as Timestamp? ?? b.data()['created_at'] as Timestamp?;
-                final aDate = aTs?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
-                final bDate = bTs?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
-                return bDate.compareTo(aDate);
-              });
+    );
+  }
 
-            if (filtered.isEmpty) {
-              return _emptyState(theme);
-            }
+  Widget _buildCustomSegmentedControl(ThemeData theme) {
+    // A custom look to match the screenshot more closely than SegmentedButton
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          _buildSegment('All', 'all'),
+          _buildSegment('Pending', 'pending'),
+          _buildSegment('Approved', 'approved'),
+          _buildSegment('Rejected', 'rejected'),
+        ],
+      ),
+    );
+  }
 
-            return ListView.separated(
-              padding: const EdgeInsets.all(20),
-              itemCount: filtered.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 16),
-              itemBuilder: (context, index) {
-                final doc = filtered[index];
-                final data = doc.data();
-                final status = (data['approval_status'] as String?)?.toLowerCase();
-                return _TherapistCard(
-                  data: data,
-                  status: status,
-                  onApprove: status == 'approved' ? null : () => _approveTherapist(doc.id),
-                  onReject: status == 'rejected' ? null : () => _rejectTherapist(doc.id),
-                  onViewDetails: () => _showTherapistDetails(data),
-                );
-              },
-            );
-          },
+  Widget _buildSegment(String label, String value) {
+    final isSelected = _filter == value;
+    final theme = Theme.of(context);
+    
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _filter = value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF5E6A81) : Colors.transparent, // Dark grey/blueish from screenshot
+            borderRadius: BorderRadius.circular(11),
+          ),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isSelected) ...[
+                const Icon(Icons.check, size: 16, color: Colors.white),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                label,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: isSelected ? Colors.white : theme.colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -277,24 +318,19 @@ class _TherapistApprovalsPageState extends State<TherapistApprovalsPage> {
 
   Widget _emptyState(ThemeData theme) {
     return Center(
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          color: theme.colorScheme.surface,
-          border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4)),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.verified_user_outlined, size: 48, color: theme.colorScheme.primary),
+            Icon(Icons.inbox_outlined, size: 48, color: theme.colorScheme.outline),
             const SizedBox(height: 12),
-            Text('No therapist applications', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
+            Text('No applications found', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
             Text(
-              'Therapist submissions matching your filter will appear here.',
+              'Try changing the filter or come back later.',
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -306,7 +342,8 @@ class _TherapistApprovalsPageState extends State<TherapistApprovalsPage> {
     final city = (data['city'] ?? '').toString().trim();
     final state = (data['state'] ?? '').toString().trim();
     final zip = (data['zip_code'] ?? '').toString().trim();
-    return [city, state, zip].where((part) => part.isNotEmpty).join(', ');
+    final parts = [city, state, zip].where((part) => part.isNotEmpty);
+    return parts.isEmpty ? 'Unknown location' : parts.join(', ');
   }
 
   static List<String> _resolveEducationSummaries(Map<String, dynamic> data) {
@@ -364,20 +401,28 @@ class _TherapistCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final name = (data['full_name'] ?? 'Unnamed therapist').toString();
-    final practice = (data['practice_name'] ?? '—').toString();
+    final name = (data['full_name'] ?? 'Unnamed Therapist').toString();
+    final practice = (data['practice_name'] ?? 'No Practice Name').toString();
+    final email = (data['contact_email'] ?? '').toString();
+    final phone = (data['contact_phone'] ?? '').toString();
+    final location = _TherapistApprovalsPageState._formatLocation(data);
+    
     final approvalRequestedAt = data['approval_requested_at'] as Timestamp? ?? data['created_at'] as Timestamp?;
-    final requestedLabel = approvalRequestedAt != null
-        ? 'Requested ${_timeAgo(approvalRequestedAt.toDate())}'
-        : 'Awaiting review';
+    final dateLabel = approvalRequestedAt != null
+        ? '${approvalRequestedAt.toDate().month}/${approvalRequestedAt.toDate().day}/${approvalRequestedAt.toDate().year}'
+        : 'Unknown Date';
 
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 6)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Padding(
@@ -385,14 +430,16 @@ class _TherapistCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header Row
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CircleAvatar(
                   radius: 28,
                   backgroundColor: _getStatusColor(colorScheme).withValues(alpha: 0.1),
                   child: Text(
                     name.isNotEmpty ? name[0].toUpperCase() : '?',
-                    style: theme.textTheme.titleLarge?.copyWith(
+                    style: theme.textTheme.headlineSmall?.copyWith(
                       color: _getStatusColor(colorScheme),
                       fontWeight: FontWeight.w700,
                     ),
@@ -403,20 +450,31 @@ class _TherapistCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 4),
-                      Text(practice, style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withValues(alpha: 0.7))),
-                      const SizedBox(height: 4),
+                      Text(
+                        name,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 18,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        practice,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
                       Row(
                         children: [
-                          Flexible(
-                            child: Text(
-                              requestedLabel,
-                              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.primary),
-                              overflow: TextOverflow.ellipsis,
+                          Text(
+                            'Requested $dateLabel',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: const Color(0xFF1976D2), // Blue link color from screenshot
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 12),
                           _StatusBadge(status: status),
                         ],
                       ),
@@ -425,52 +483,85 @@ class _TherapistCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
+            
+            const SizedBox(height: 20),
+            
+            // Location
+            _IconTextRow(
+              icon: Icons.location_on_outlined,
+              text: location,
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Email & Phone
+            Row(
               children: [
-                _InfoPill(icon: Icons.location_on_outlined, label: _TherapistApprovalsPageState._formatLocation(data)),
-                if ((data['contact_email'] ?? '').toString().isNotEmpty)
-                  _InfoPill(icon: Icons.email_outlined, label: data['contact_email']),
-                if ((data['contact_phone'] ?? '').toString().isNotEmpty)
-                  _InfoPill(icon: Icons.phone_outlined, label: data['contact_phone']),
+                Expanded(
+                  child: _IconTextRow(
+                    icon: Icons.email_outlined,
+                    text: email,
+                  ),
+                ),
+                if (phone.isNotEmpty) ...[
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _IconTextRow(
+                      icon: Icons.phone_outlined,
+                      text: phone,
+                    ),
+                  ),
+                ],
               ],
             ),
-            const SizedBox(height: 16),
+            
+            const SizedBox(height: 24),
+            
+            // Action Buttons
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
               alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 12,
               children: [
                 TextButton.icon(
                   onPressed: onViewDetails,
-                  icon: const Icon(Icons.remove_red_eye_outlined),
+                  icon: const Icon(Icons.remove_red_eye_outlined, size: 20),
                   label: const Text('View details'),
-                  style: TextButton.styleFrom(foregroundColor: colorScheme.primary),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF1976D2),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
                   children: [
                     if (onReject != null)
                       OutlinedButton.icon(
                         onPressed: onReject,
-                        icon: const Icon(Icons.cancel),
+                        icon: const Icon(Icons.cancel, size: 18),
                         label: const Text('Reject'),
-                        style: OutlinedButton.styleFrom(foregroundColor: colorScheme.error),
-                      ),
-                    if (onApprove != null) ...[
-                      const SizedBox(width: 8),
-                      FilledButton.icon(
-                        onPressed: onApprove,
-                        icon: const Icon(Icons.verified),
-                        label: const Text('Approve'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: colorScheme.primary,
-                          foregroundColor: colorScheme.onPrimary,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: colorScheme.error,
+                          side: BorderSide(color: colorScheme.error.withValues(alpha: 0.5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         ),
                       ),
-                    ],
+                    if (onApprove != null)
+                      FilledButton.icon(
+                        onPressed: onApprove,
+                        icon: const Icon(Icons.verified, size: 18),
+                        label: const Text('Approve'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF1976D2),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        ),
+                      ),
                   ],
                 ),
               ],
@@ -480,7 +571,7 @@ class _TherapistCard extends StatelessWidget {
       ),
     );
   }
-
+  
   Color _getStatusColor(ColorScheme colorScheme) {
     switch (status) {
       case 'approved':
@@ -488,18 +579,8 @@ class _TherapistCard extends StatelessWidget {
       case 'rejected':
         return colorScheme.error;
       default:
-        return colorScheme.primary;
+        return const Color(0xFF1976D2);
     }
-  }
-
-  static String _timeAgo(DateTime time) {
-    final now = DateTime.now();
-    final diff = now.difference(time);
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inHours < 1) return '${diff.inMinutes} minute${diff.inMinutes == 1 ? '' : 's'} ago';
-    if (diff.inDays < 1) return '${diff.inHours} hour${diff.inHours == 1 ? '' : 's'} ago';
-    if (diff.inDays < 7) return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
-    return '${time.month}/${time.day}/${time.year}';
   }
 }
 
@@ -513,18 +594,18 @@ class _StatusBadge extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final statusText = _getStatusText();
-    final statusColor = _getStatusColor(colorScheme);
+    final color = _getStatusColor(colorScheme);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: statusColor.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         statusText,
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: statusColor,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: color,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -549,41 +630,43 @@ class _StatusBadge extends StatelessWidget {
   Color _getStatusColor(ColorScheme colorScheme) {
     switch (status) {
       case 'approved':
-        return Colors.green;
+        return const Color(0xFF4CAF50); // Green
       case 'rejected':
         return colorScheme.error;
       default:
-        return colorScheme.primary;
+        return const Color(0xFF1976D2); // Blue
     }
   }
 }
 
-class _InfoPill extends StatelessWidget {
+class _IconTextRow extends StatelessWidget {
   final IconData icon;
-  final String label;
+  final String text;
 
-  const _InfoPill({required this.icon, required this.label});
+  const _IconTextRow({required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+    final hasText = text.trim().isNotEmpty;
+    
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18, color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+        if (hasText) ...[
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              text,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
-      ),
+      ],
     );
   }
 }

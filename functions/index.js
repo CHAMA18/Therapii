@@ -1,12 +1,20 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
-const sgMail = require('@sendgrid/mail');
 const axios = require('axios');
 
 admin.initializeApp();
 
-// Default sender email (fallback only)
-const SENDER_EMAIL = process.env.SENDGRID_FROM_EMAIL || functions.config().sendgrid?.from || 'no-reply@therapii.app';
+/**
+ * Get Stripe instance with secret key from environment
+ * IMPORTANT: Never hardcode API keys in source code
+ */
+function getStripe() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey || secretKey.trim().length === 0) {
+    throw new Error('STRIPE_SECRET_KEY environment variable is not configured. Please set it using Firebase secrets.');
+  }
+  return require('stripe')(secretKey);
+}
 
 const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
 
@@ -39,57 +47,41 @@ async function getOpenAiApiKey() {
   return '';
 }
 
-// No hard-coded SendGrid defaults. Use env or Firestore configuration only.
-
 /**
- * Fetch SendGrid configuration from Firestore admin settings
- * Falls back to environment variables if not configured
+ * Fetch email configuration from Firestore admin settings
+ * Used to determine the sender email address for invitations
  */
-async function getSendGridConfig() {
+async function getEmailConfig() {
   try {
     const doc = await admin.firestore()
       .collection('admin_settings')
-      .doc('sendgrid_config')
+      .doc('email_config')
       .get();
     
     if (doc.exists) {
       const data = doc.data();
-      const apiKey = data?.api_key || '';
-      const apiKeyId = data?.api_key_id || '';
       const fromEmail = (data?.from_email || '').toString().trim();
-      const enabledFlag = typeof data?.enabled === 'boolean' ? !!data.enabled : true;
+      const fromName = (data?.from_name || '').toString().trim();
+      const enabled = typeof data?.enabled === 'boolean' ? data.enabled : true;
       
-      // Return Firestore config if API key is present
-      if (apiKey && apiKey.trim().length > 0) {
-        return {
-          apiKey: apiKey.trim(),
-          apiKeyId: apiKeyId ? apiKeyId.trim() : '',
-          enabled: enabledFlag,
-          fromEmail: fromEmail || null,
-        };
-      }
+      return {
+        fromEmail: fromEmail || 'noreply@therapii.app',
+        fromName: fromName || 'Therapii',
+        enabled,
+      };
     }
-    // Fallback to environment variables only (no hard-coded secrets)
-    const envApiKey = (process.env.SENDGRID_API_KEY || '').toString().trim();
-    const envApiKeyId = (process.env.SENDGRID_API_KEY_ID || '').toString().trim();
-    const envFrom = process.env.SENDGRID_FROM_EMAIL || functions.config().sendgrid?.from || SENDER_EMAIL;
+    
     return {
-      apiKey: envApiKey,
-      apiKeyId: envApiKeyId,
-      enabled: !!envApiKey, // enable only if a key is present
-      fromEmail: envFrom,
+      fromEmail: process.env.EMAIL_FROM || 'noreply@therapii.app',
+      fromName: process.env.EMAIL_FROM_NAME || 'Therapii',
+      enabled: true,
     };
   } catch (error) {
-    console.error('Failed to fetch SendGrid config from Firestore:', error);
-    // Return env on error
-    const envApiKey = (process.env.SENDGRID_API_KEY || '').toString().trim();
-    const envApiKeyId = (process.env.SENDGRID_API_KEY_ID || '').toString().trim();
-    const envFrom = process.env.SENDGRID_FROM_EMAIL || functions.config().sendgrid?.from || SENDER_EMAIL;
+    console.error('Failed to fetch email config from Firestore:', error);
     return {
-      apiKey: envApiKey,
-      apiKeyId: envApiKeyId,
-      enabled: !!envApiKey,
-      fromEmail: envFrom,
+      fromEmail: process.env.EMAIL_FROM || 'noreply@therapii.app',
+      fromName: process.env.EMAIL_FROM_NAME || 'Therapii',
+      enabled: true,
     };
   }
 }
@@ -203,14 +195,11 @@ exports.createInvitationAndSendEmail = functions.https.onCall(async (data, conte
 
     let emailSent = false;
     
-    // Fetch SendGrid configuration from Firestore/env
-    const sendGridConfig = await getSendGridConfig();
+    // Fetch email configuration from Firestore/env
+    const emailConfig = await getEmailConfig();
     
-    if (sendGridConfig.enabled) {
+    if (emailConfig.enabled) {
       try {
-        // Configure SendGrid with the API key from Firestore
-        sgMail.setApiKey(sendGridConfig.apiKey);
-        
         // Build email body
         const emailBody = `Hello ${patientFirstName},
 
@@ -233,30 +222,39 @@ If you did not request this code, please ignore this email or contact us immedia
 Warm regards,
 The Therapii Team`;
 
-        // Determine sender email
-        const sender = (sendGridConfig.fromEmail || SENDER_EMAIL).toString().trim();
-        if (!sender) {
-          console.warn('SendGrid configured without a from_email; skipping email delivery.');
-        } else {
-          // Prepare SendGrid message
-        const msg = {
-          to: patientEmail,
-            from: sender,
-          subject: 'Your Unique Therapii Connection Code',
-          text: emailBody,
+        // Write email document to Firestore for Firebase extension to process
+        const emailDoc = {
+          to: [patientEmail],
+          message: {
+            subject: 'Your Unique Therapii Connection Code',
+            text: emailBody,
+            html: emailBody.replace(/\n/g, '<br>'),
+          },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          metadata: {
+            invitationId: invitationRef.id,
+            code: code,
+            patientFirstName: patientFirstName,
+          }
         };
 
-          await sgMail.send(msg);
-          emailSent = true;
-          console.log(`Email sent successfully to ${patientEmail} (from: ${sender})`);
+        // Add sender information if configured
+        if (emailConfig.fromEmail) {
+          emailDoc.from = emailConfig.fromName 
+            ? `${emailConfig.fromName} <${emailConfig.fromEmail}>`
+            : emailConfig.fromEmail;
         }
+
+        await admin.firestore().collection('mail').add(emailDoc);
+        emailSent = true;
+        console.log(`Email queued successfully for ${patientEmail}`);
       } catch (emailError) {
-        console.error('Failed to send email via SendGrid:', emailError);
+        console.error('Failed to queue email:', emailError);
         // Don't fail the entire function if email fails - invitation is already created
         // The user can still manually share the code
       }
     } else {
-      console.log('SendGrid not configured in Admin Settings; skipping email delivery.');
+      console.log('Email not configured in Admin Settings; skipping email delivery.');
     }
 
     // Return invitation data
@@ -282,20 +280,12 @@ The Therapii Team`;
     const baselineErrorMessage = 'Failed to create invitation';
     let detailedMessage = error && error.message ? error.message : baselineErrorMessage;
 
-    if (error.response) {
-      console.error('SendGrid response error:', error.response.body);
-      const responseErrors = error.response.body && error.response.body.errors;
-      if (Array.isArray(responseErrors) && responseErrors.length > 0) {
-        detailedMessage = responseErrors.map((err) => err.message).join(' | ');
-      }
-    }
-
     try {
       if (invitationRef) {
         await invitationRef.delete();
       }
     } catch (cleanupError) {
-      console.error('Failed to delete invitation after SendGrid error:', cleanupError);
+      console.error('Failed to delete invitation after error:', cleanupError);
     }
 
     // Persist error context for debugging so the client can surface actionable info
@@ -911,5 +901,150 @@ exports.getAcceptedInvitationsForPatient = functions.https.onCall(async (data, c
     return { invitations: list };
   } catch (err) {
     throw new functions.https.HttpsError('unknown', `Failed to fetch patient invitations: ${err?.message || err}`);
+  }
+});
+
+/**
+ * Create Stripe Checkout Session for subscription
+ * Keeps secret key secure server-side
+ */
+exports.createStripeCheckoutSession = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
+  }
+
+  const userId = context.auth.uid;
+  const email = context.auth.token.email || '';
+  const priceId = data?.priceId || 'price_1SOt2aL9fA3Th1kO32maIqxk';
+
+  try {
+    const stripe = getStripe();
+    
+    // Get or create Stripe customer
+    let customerId = null;
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+    const userData = userDoc.exists ? userDoc.data() : {};
+    
+    if (userData.stripe_customer_id) {
+      customerId = userData.stripe_customer_id;
+    } else {
+      // Create new customer
+      const customer = await stripe.customers.create({
+        email: email,
+        metadata: { userId: userId },
+      });
+      customerId = customer.id;
+      
+      // Save customer ID to user document
+      await admin.firestore().collection('users').doc(userId).update({
+        stripe_customer_id: customerId,
+      });
+    }
+
+    // Create Stripe Checkout Session
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      customer: customerId,
+      client_reference_id: userId,
+      success_url: `${data?.successUrl || 'https://therapii.app/success'}?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: data?.cancelUrl || 'https://therapii.app/billing',
+      metadata: {
+        userId: userId,
+      },
+      subscription_data: {
+        metadata: {
+          userId: userId,
+        },
+      },
+    });
+
+    return {
+      sessionId: session.id,
+      url: session.url,
+    };
+  } catch (error) {
+    console.error('Error creating Stripe Checkout session:', error);
+    
+    // Check if error is due to missing Stripe key
+    if (error?.message?.includes('STRIPE_SECRET_KEY')) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Stripe is not configured. Please configure STRIPE_SECRET_KEY in Firebase secrets.'
+      );
+    }
+    
+    throw new functions.https.HttpsError(
+      'internal',
+      `Failed to create checkout session: ${error?.message || error}`
+    );
+  }
+});
+
+/**
+ * Fetch invoices from Stripe for the authenticated user
+ */
+exports.getStripeInvoices = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
+  }
+
+  const userId = context.auth.uid;
+
+  try {
+    const stripe = getStripe();
+    
+    // Get user's Stripe customer ID
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      return { invoices: [] };
+    }
+
+    const userData = userDoc.data();
+    const customerId = userData.stripe_customer_id;
+
+    if (!customerId) {
+      // User has no Stripe customer ID, so no invoices
+      return { invoices: [] };
+    }
+
+    // Fetch invoices from Stripe
+    const invoices = await stripe.invoices.list({
+      customer: customerId,
+      limit: 10,
+      status: 'paid', // Only fetch paid invoices
+    });
+
+    // Transform Stripe invoices to our format
+    const transformedInvoices = invoices.data.map(invoice => ({
+      id: invoice.number || invoice.id,
+      amount: invoice.amount_paid / 100, // Convert from cents to dollars
+      issuedAt: new Date(invoice.created * 1000).toISOString(),
+      status: 'paid',
+      invoiceUrl: invoice.invoice_pdf,
+    }));
+
+    return { invoices: transformedInvoices };
+  } catch (error) {
+    console.error('Error fetching Stripe invoices:', error);
+    
+    // Check if error is due to missing Stripe key
+    if (error?.message?.includes('STRIPE_SECRET_KEY')) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Stripe is not configured. Please configure STRIPE_SECRET_KEY in Firebase secrets.'
+      );
+    }
+    
+    throw new functions.https.HttpsError(
+      'internal',
+      `Failed to fetch invoices: ${error?.message || error}`
+    );
   }
 });

@@ -5,7 +5,6 @@ import 'package:therapii/pages/patient_dashboard_page.dart';
 import 'package:therapii/pages/patient_onboarding_flow_page.dart';
 import 'package:therapii/pages/therapist_welcome_psychology_today_page.dart';
 import 'package:therapii/services/user_service.dart';
-import 'package:therapii/widgets/primary_button.dart';
 
 class VerifyEmailPage extends StatefulWidget {
   final String email;
@@ -92,53 +91,158 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> {
   @override
   void initState() {
     super.initState();
-    // If the user just signed up, they likely already got a verification email.
   }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    // We want a clean, bright look primarily, but support dark mode nicely
+    final backgroundColor = isDark ? theme.scaffoldBackgroundColor : Colors.white;
+    final titleColor = isDark ? Colors.white : Colors.black87;
+    final bodyColor = isDark ? Colors.grey[400] : const Color(0xFF5F6368);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Verify your email')),
+      backgroundColor: backgroundColor,
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Icon(Icons.mark_email_unread, size: 64, color: scheme.primary),
-                  const SizedBox(height: 16),
-                  Text('Confirm your account', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700), textAlign: TextAlign.center),
-                  const SizedBox(height: 8),
-                  Text(
-                    'We\'ve sent a verification link to ${widget.email}.\nPlease click the link in your email to confirm your account before continuing.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  PrimaryButton(
-                    label: 'Resend email',
-                    onPressed: _sending ? null : _sendVerificationEmail,
-                    isLoading: _sending,
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton(
-                    onPressed: _checking ? null : _checkVerified,
-                    child: _checking ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('I\'ve verified, continue'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: () => FirebaseAuth.FirebaseAuth.instance.signOut().then((_) => Navigator.of(context).popUntil((r) => r.isFirst)),
-                    child: const Text('Use a different email'),
-                  )
-                ],
+        child: Column(
+          children: [
+            // Top Header Title
+            Padding(
+              padding: const EdgeInsets.only(top: 20.0, bottom: 10.0),
+              child: Text(
+                'Verify your email',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                  color: titleColor,
+                ),
               ),
             ),
-          ),
+            
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Icon
+                        Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                          ),
+                          child: Icon(
+                            Icons.mark_email_unread_rounded,
+                            size: 48,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        
+                        // Main Title
+                        Text(
+                          'Confirm your account',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: titleColor,
+                            fontSize: 24,
+                            letterSpacing: -0.5,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Body Text
+                        Text(
+                          'We\'ve sent a verification link to\n${widget.email}.\nPlease click the link in your email to confirm your\naccount before continuing.',
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: bodyColor,
+                            height: 1.5,
+                            fontSize: 15,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 48),
+                        
+                        // Resend Button
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: _sending ? null : _sendVerificationEmail,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: theme.colorScheme.primary,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shadowColor: Colors.transparent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                            ),
+                            child: _sending 
+                              ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                              : const Text(
+                                  'RESEND EMAIL',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 0.5),
+                                ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Verified Button
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: OutlinedButton(
+                            onPressed: _checking ? null : _checkVerified,
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: Colors.grey.shade300, width: 1),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                              backgroundColor: isDark ? Colors.transparent : Colors.white,
+                              foregroundColor: isDark ? Colors.white : Colors.black87,
+                              elevation: 0,
+                            ),
+                            child: _checking 
+                              ? SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2, color: theme.colorScheme.primary)) 
+                              : const Text(
+                                  'I\'ve verified, continue',
+                                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                                ),
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 24),
+                        
+                        // Different Email
+                        TextButton(
+                          onPressed: () => FirebaseAuth.FirebaseAuth.instance.signOut().then((_) => Navigator.of(context).popUntil((r) => r.isFirst)),
+                          child: Text(
+                            'Use a different email',
+                            style: TextStyle(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

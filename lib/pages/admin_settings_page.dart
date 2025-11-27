@@ -12,23 +12,20 @@ class AdminSettingsPage extends StatefulWidget {
 
 class _AdminSettingsPageState extends State<AdminSettingsPage> {
   final _apiKeyController = TextEditingController();
-  final _sendgridApiKeyController = TextEditingController();
-  final _sendgridApiKeyIdController = TextEditingController();
-  final _sendgridFromEmailController = TextEditingController();
+  final _emailFromController = TextEditingController();
+  final _emailFromNameController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _loading = true;
   bool _saving = false;
   bool _obscureKey = true;
-  bool _obscureSendgridKey = true;
   String? _currentKey;
-  String? _currentSendgridApiKey;
-  String? _currentSendgridApiKeyId;
-  String? _currentSendgridFromEmail;
+  String? _currentEmailFrom;
+  String? _currentEmailFromName;
   String? _lastUpdatedBy;
   DateTime? _lastUpdatedAt;
-  String? _sendgridLastUpdatedBy;
-  DateTime? _sendgridLastUpdatedAt;
-  bool _sendgridEnabled = true;
+  String? _emailLastUpdatedBy;
+  DateTime? _emailLastUpdatedAt;
+  bool _emailEnabled = true;
 
   @override
   void initState() {
@@ -39,9 +36,8 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
   @override
   void dispose() {
     _apiKeyController.dispose();
-    _sendgridApiKeyController.dispose();
-    _sendgridApiKeyIdController.dispose();
-    _sendgridFromEmailController.dispose();
+    _emailFromController.dispose();
+    _emailFromNameController.dispose();
     super.dispose();
   }
 
@@ -65,29 +61,25 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
         }
       }
 
-      final sendgridDoc = await FirebaseFirestore.instance
+      final emailDoc = await FirebaseFirestore.instance
           .collection('admin_settings')
-          .doc('sendgrid_config')
+          .doc('email_config')
           .get();
 
-      if (sendgridDoc.exists && mounted) {
-        final data = sendgridDoc.data();
-        _currentSendgridApiKey = data?['api_key'] as String?;
-        _currentSendgridApiKeyId = data?['api_key_id'] as String?;
-        _currentSendgridFromEmail = data?['from_email'] as String?;
-        _sendgridEnabled = (data?['enabled'] as bool?) ?? true;
-        _sendgridLastUpdatedBy = data?['updated_by'] as String?;
+      if (emailDoc.exists && mounted) {
+        final data = emailDoc.data();
+        _currentEmailFrom = data?['from_email'] as String?;
+        _currentEmailFromName = data?['from_name'] as String?;
+        _emailEnabled = (data?['enabled'] as bool?) ?? true;
+        _emailLastUpdatedBy = data?['updated_by'] as String?;
         final timestamp = data?['updated_at'] as Timestamp?;
-        _sendgridLastUpdatedAt = timestamp?.toDate();
+        _emailLastUpdatedAt = timestamp?.toDate();
         
-        if (_currentSendgridApiKey != null) {
-          _sendgridApiKeyController.text = _currentSendgridApiKey!;
+        if (_currentEmailFrom != null) {
+          _emailFromController.text = _currentEmailFrom!;
         }
-        if (_currentSendgridApiKeyId != null) {
-          _sendgridApiKeyIdController.text = _currentSendgridApiKeyId!;
-        }
-        if (_currentSendgridFromEmail != null) {
-          _sendgridFromEmailController.text = _currentSendgridFromEmail!;
+        if (_currentEmailFromName != null) {
+          _emailFromNameController.text = _currentEmailFromName!;
         }
       }
     } catch (e) {
@@ -186,7 +178,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
     }
   }
 
-  Future<void> _saveSendgridConfig() async {
+  Future<void> _saveEmailConfig() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _saving = true);
@@ -197,28 +189,26 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
         return;
       }
 
-      final apiKey = _sendgridApiKeyController.text.trim();
-      final apiKeyId = _sendgridApiKeyIdController.text.trim();
-      final fromEmail = _sendgridFromEmailController.text.trim();
+      final fromEmail = _emailFromController.text.trim();
+      final fromName = _emailFromNameController.text.trim();
       await FirebaseFirestore.instance
           .collection('admin_settings')
-          .doc('sendgrid_config')
+          .doc('email_config')
           .set({
-        'api_key': apiKey,
-        'api_key_id': apiKeyId,
         'from_email': fromEmail,
-        'enabled': _sendgridEnabled,
+        'from_name': fromName,
+        'enabled': _emailEnabled,
         'updated_by': user.email ?? user.uid,
         'updated_at': FieldValue.serverTimestamp(),
       });
 
       if (mounted) {
-        _showSuccess('SendGrid configuration saved successfully!');
+        _showSuccess('Email configuration saved successfully!');
         await _loadApiKey();
       }
     } catch (e) {
       if (mounted) {
-        _showError('Failed to save SendGrid configuration: $e');
+        _showError('Failed to save email configuration: $e');
       }
     } finally {
       if (mounted) {
@@ -227,13 +217,13 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
     }
   }
 
-  Future<void> _deleteSendgridConfig() async {
+  Future<void> _deleteEmailConfig() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete SendGrid Config'),
+        title: const Text('Delete Email Config'),
         content: const Text(
-          'Are you sure you want to delete the SendGrid configuration? This will disable email notifications.',
+          'Are you sure you want to delete the email configuration? This will disable email notifications.',
         ),
         actions: [
           TextButton(
@@ -255,23 +245,21 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
     try {
       await FirebaseFirestore.instance
           .collection('admin_settings')
-          .doc('sendgrid_config')
+          .doc('email_config')
           .delete();
 
       if (mounted) {
-        _sendgridApiKeyController.clear();
-        _sendgridApiKeyIdController.clear();
-        _sendgridFromEmailController.clear();
-        _currentSendgridApiKey = null;
-        _currentSendgridApiKeyId = null;
-        _currentSendgridFromEmail = null;
-        _sendgridLastUpdatedBy = null;
-        _sendgridLastUpdatedAt = null;
-        _showSuccess('SendGrid configuration deleted successfully.');
+        _emailFromController.clear();
+        _emailFromNameController.clear();
+        _currentEmailFrom = null;
+        _currentEmailFromName = null;
+        _emailLastUpdatedBy = null;
+        _emailLastUpdatedAt = null;
+        _showSuccess('Email configuration deleted successfully.');
       }
     } catch (e) {
       if (mounted) {
-        _showError('Failed to delete SendGrid configuration: $e');
+        _showError('Failed to delete email configuration: $e');
       }
     } finally {
       if (mounted) {
@@ -530,7 +518,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'SendGrid Configuration',
+                                  'Email Configuration',
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: scheme.onSurface,
@@ -538,7 +526,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Configure SendGrid for email notifications. Changes take effect immediately when sending invitations.',
+                                  'Configure email settings for invitation notifications via Firebase Extension + Resend.',
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: scheme.onSurface.withValues(alpha: 0.7),
                                   ),
@@ -551,89 +539,50 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      'SendGrid API Key',
+                      'From Email Address',
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
-                      controller: _sendgridApiKeyController,
-                      obscureText: _obscureSendgridKey,
+                      controller: _emailFromController,
                       decoration: InputDecoration(
-                        hintText: 'SG...',
+                        hintText: 'noreply@yourdomain.com',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        suffixIcon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                _obscureSendgridKey ? Icons.visibility : Icons.visibility_off,
-                              ),
-                              onPressed: () {
-                                setState(() => _obscureSendgridKey = !_obscureSendgridKey);
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.content_copy),
-                              onPressed: () {
-                                final key = _sendgridApiKeyController.text;
-                                if (key.isNotEmpty) {
-                                  Clipboard.setData(ClipboardData(text: key));
-                                  _showSuccess('SendGrid API key copied to clipboard');
-                                }
-                              },
-                            ),
-                          ],
-                        ),
                       ),
                       validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter a SendGrid API key';
+                        final v = value?.trim() ?? '';
+                        if (v.isEmpty) {
+                          return 'Please enter a sender email';
                         }
-                        if (!value.startsWith('SG.')) {
-                          return 'SendGrid API key should start with "SG."';
+                        if (!v.contains('@') || v.startsWith('@') || v.endsWith('@')) {
+                          return 'Enter a valid email address';
                         }
                         return null;
                       },
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'SendGrid API Key ID',
+                      'From Name',
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
-                      controller: _sendgridApiKeyIdController,
+                      controller: _emailFromNameController,
                       decoration: InputDecoration(
-                        hintText: 'Enter API Key ID',
+                        hintText: 'Therapii',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.content_copy),
-                          onPressed: () {
-                            final keyId = _sendgridApiKeyIdController.text;
-                            if (keyId.isNotEmpty) {
-                              Clipboard.setData(ClipboardData(text: keyId));
-                              _showSuccess('API Key ID copied to clipboard');
-                            }
-                          },
-                        ),
                       ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter a SendGrid API Key ID';
-                        }
-                        return null;
-                      },
                     ),
                     const SizedBox(height: 16),
-                    if (_sendgridLastUpdatedBy != null || _sendgridLastUpdatedAt != null)
+                    if (_emailLastUpdatedBy != null || _emailLastUpdatedAt != null)
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -650,7 +599,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Last updated${_sendgridLastUpdatedBy != null ? " by $_sendgridLastUpdatedBy" : ""}${_sendgridLastUpdatedAt != null ? " on ${_formatDate(_sendgridLastUpdatedAt!)}" : ""}',
+                                'Last updated${_emailLastUpdatedBy != null ? " by $_emailLastUpdatedBy" : ""}${_emailLastUpdatedAt != null ? " on ${_formatDate(_emailLastUpdatedAt!)}" : ""}',
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: scheme.onSurface.withValues(alpha: 0.6),
                                 ),
@@ -659,46 +608,19 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                           ],
                         ),
                       ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Verified From Email',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _sendgridFromEmailController,
-                      decoration: InputDecoration(
-                        hintText: 'no-reply@yourdomain.com',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      validator: (value) {
-                        final v = value?.trim() ?? '';
-                        if (v.isEmpty) {
-                          return 'Please enter a verified sender email';
-                        }
-                        if (!v.contains('@') || v.startsWith('@') || v.endsWith('@')) {
-                          return 'Enter a valid email address';
-                        }
-                        return null;
-                      },
-                    ),
                     const SizedBox(height: 12),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Enable email delivery'),
-                      value: _sendgridEnabled,
-                      onChanged: (v) => setState(() => _sendgridEnabled = v),
+                      value: _emailEnabled,
+                      onChanged: (v) => setState(() => _emailEnabled = v),
                     ),
                     const SizedBox(height: 24),
                     Row(
                       children: [
                         Expanded(
                           child: ElevatedButton.icon(
-                            onPressed: _saving ? null : _saveSendgridConfig,
+                            onPressed: _saving ? null : _saveEmailConfig,
                             icon: _saving
                                 ? const SizedBox(
                                     width: 16,
@@ -708,7 +630,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                                     ),
                                   )
                                 : const Icon(Icons.save),
-                            label: Text(_saving ? 'Saving...' : 'Save SendGrid Config'),
+                            label: Text(_saving ? 'Saving...' : 'Save Email Config'),
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               backgroundColor: scheme.secondary,
@@ -716,13 +638,13 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                             ),
                           ),
                         ),
-                        if (_currentSendgridApiKey != null) ...[
+                        if (_currentEmailFrom != null) ...[
                           const SizedBox(width: 12),
                           IconButton(
-                            onPressed: _saving ? null : _deleteSendgridConfig,
+                            onPressed: _saving ? null : _deleteEmailConfig,
                             icon: const Icon(Icons.delete_outline),
                             color: Colors.red,
-                            tooltip: 'Delete SendGrid Config',
+                            tooltip: 'Delete Email Config',
                           ),
                         ],
                       ],
@@ -746,7 +668,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                'How to get SendGrid API credentials',
+                                'Setup Firebase Extension + Resend',
                                 style: theme.textTheme.titleSmall?.copyWith(
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -754,11 +676,13 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          _buildStep('1', 'Visit app.sendgrid.com'),
-                          _buildStep('2', 'Sign in to your account'),
-                          _buildStep('3', 'Navigate to Settings > API Keys'),
-                          _buildStep('4', 'Click "Create API Key"'),
-                          _buildStep('5', 'Copy the API key and ID above'),
+                          _buildStep('1', 'Sign up at resend.com and create an API key'),
+                          _buildStep('2', 'Go to Firebase Console > Extensions'),
+                          _buildStep('3', 'Install "Trigger Email from Firestore"'),
+                          _buildStep('4', 'Configure SMTP: Host=smtp.resend.com, Port=465'),
+                          _buildStep('5', 'Set Username=resend, Password=your_api_key'),
+                          _buildStep('6', 'Set Collection path to "mail"'),
+                          _buildStep('7', 'Verify your domain in Resend for production'),
                         ],
                       ),
                     ),

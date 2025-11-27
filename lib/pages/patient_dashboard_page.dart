@@ -1,18 +1,27 @@
 import 'dart:async';
+import 'dart:ui';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'package:google_fonts/google_fonts.dart';
 
 import 'package:therapii/auth/firebase_auth_manager.dart';
 import 'package:therapii/models/invitation_code.dart';
 import 'package:therapii/models/user.dart' as app_user;
 import 'package:therapii/pages/ai_therapist_chat_page.dart';
 import 'package:therapii/pages/auth_welcome_page.dart';
+import 'package:therapii/pages/billing_page.dart';
 import 'package:therapii/pages/patient_chat_page.dart';
 import 'package:therapii/pages/patient_voice_conversation_page.dart';
+import 'package:therapii/pages/support_center_page.dart';
 import 'package:therapii/services/chat_service.dart';
 import 'package:therapii/services/invitation_service.dart';
 import 'package:therapii/services/user_service.dart';
+import 'package:therapii/theme.dart';
+import 'package:therapii/widgets/common_settings_drawer.dart';
+import 'package:therapii/widgets/dashboard_action_card.dart';
 
 class PatientDashboardPage extends StatefulWidget {
   final String? therapistId;
@@ -31,6 +40,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
 
   app_user.User? _patient;
   app_user.User? _therapistUser;
+  String? _therapistAiName;
   bool _loading = true;
   bool _processingCode = false;
   String? _error;
@@ -90,19 +100,53 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     if (!mounted) return;
 
     if (therapistId == null || therapistId.isEmpty) {
-      setState(() => _therapistUser = null);
+      setState(() {
+        _therapistUser = null;
+        _therapistAiName = null;
+      });
       return;
     }
 
     try {
-      final therapist = await _userService.getUser(therapistId);
+      final doc = await FirebaseFirestore.instance.collection('users').doc(therapistId).get();
       if (!mounted) return;
-      setState(() => _therapistUser = therapist);
-    } catch (error) {
+      if (!doc.exists) {
+        setState(() {
+          _therapistUser = null;
+          _therapistAiName = null;
+        });
+        return;
+      }
+      final therapist = app_user.User.fromJson(doc.data()!);
+      
+      // Load AI name from therapist's training profile
+      String? aiName;
+      try {
+        final therapistDoc = await FirebaseFirestore.instance.collection('therapists').doc(therapistId).get();
+        if (therapistDoc.exists) {
+          final therapistData = therapistDoc.data();
+          final aiProfile = therapistData?['ai_training_profile'];
+          if (aiProfile is Map<String, dynamic>) {
+            final name = aiProfile['name'];
+            if (name is String && name.isNotEmpty) {
+              aiName = name;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Failed to load AI name: $e');
+      }
+      
+      setState(() {
+        _therapistUser = therapist;
+        _therapistAiName = aiName;
+      });
+    } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to load therapist details: $error')),
-      );
+      setState(() {
+        _therapistUser = null;
+        _therapistAiName = null;
+      });
     }
   }
 
@@ -298,15 +342,6 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     );
   }
 
-  Future<void> _signOut() async {
-    await _authManager.signOut();
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const AuthWelcomePage(initialTab: AuthTab.login)),
-      (route) => false,
-    );
-  }
-
   String _resolvePatientDisplayName() {
     final patient = _patient;
     if (patient == null) {
@@ -319,12 +354,10 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     return emailPrefix.trim().isEmpty ? 'there' : emailPrefix;
   }
 
-  String _resolveTherapistEmail() {
-    final therapist = _therapistUser;
-    return therapist?.email ?? 'your therapist';
+  String _resolveAiHandle() {
+    // Return custom AI name if available, otherwise default to 'KAI'
+    return _therapistAiName ?? 'KAI';
   }
-
-  String _resolveAiHandle() => 'KAI';
 
   Widget _buildErrorState(BuildContext context) {
     return SafeArea(
@@ -335,13 +368,15 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              Icon(Icons.error_outline_rounded, size: 48, color: Theme.of(context).colorScheme.error),
+              const SizedBox(height: 16),
               Text(
                 _error!,
                 textAlign: TextAlign.center,
                 style: Theme.of(context)
                     .textTheme
                     .bodyLarge
-                    ?.copyWith(color: Colors.redAccent, height: 1.4),
+                    ?.copyWith(color: Theme.of(context).colorScheme.error, height: 1.4),
               ),
               const SizedBox(height: 16),
               FilledButton(
@@ -366,107 +401,283 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
 
     final displayName = _resolvePatientDisplayName();
     final aiHandle = _resolveAiHandle();
-    final therapistEmail = _resolveTherapistEmail();
+    final theme = Theme.of(context);
+    
+    // Greeting logic
+    final hour = DateTime.now().hour;
+    String greeting = 'Hello';
+    if (hour < 12) {
+      greeting = 'Good morning';
+    } else if (hour < 17) {
+      greeting = 'Good afternoon';
+    } else {
+      greeting = 'Good evening';
+    }
 
-    return SafeArea(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isCompact = constraints.maxWidth < 720;
-          final horizontalPadding = isCompact ? 24.0 : 64.0;
-
-          return Padding(
-            padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: isCompact ? 24 : 48),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header Section with Avatar
+              Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 40),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Patient > Listen (Home)',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
-                            letterSpacing: 0.15,
-                          ),
-                    ),
-                    const Spacer(),
-                    TextButton.icon(
-                      onPressed: _signOut,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.black87,
-                        textStyle: Theme.of(context)
-                            .textTheme
-                            .labelLarge
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      icon: const Icon(Icons.logout_rounded),
-                      label: const Text('Logout'),
-                    ),
-                  ],
-                ),
-                Expanded(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 760),
+                    Expanded(
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment:
-                            isCompact ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Welcome back, $displayName!',
-                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.black87,
-                                ),
-                            textAlign: isCompact ? TextAlign.center : TextAlign.start,
+                            greeting + ',',
+                            style: theme.textTheme.headlineMedium?.copyWith(
+                              color: theme.colorScheme.onSurface,
+                              fontWeight: FontWeight.w400,
+                            ),
                           ),
-                          const SizedBox(height: 12),
                           Text(
-                            'How would you like to engage with Therapii today?',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.black87,
-                                ),
-                            textAlign: isCompact ? TextAlign.center : TextAlign.start,
+                            displayName,
+                            style: theme.textTheme.displaySmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: theme.colorScheme.onSurface,
+                              height: 1.1,
+                            ),
                           ),
-                          const SizedBox(height: 36),
-                          Wrap(
-                            spacing: 24,
-                            runSpacing: 24,
-                            alignment: isCompact ? WrapAlignment.center : WrapAlignment.start,
-                            children: [
-                              _DashboardActionCard(
-                                label: 'Chat with $aiHandle',
-                                onTap: _openAiTherapist,
-                              ),
-                              _DashboardActionCard(
-                                label: 'Message $therapistEmail',
-                                onTap: _therapistUser == null
-                                    ? _showTherapistRequiredSnack
-                                    : () => _handleMessageTap(_therapistUser!),
-                                muted: _therapistUser == null,
-                              ),
-                              _DashboardActionCard(
-                                label: 'Listen with $therapistEmail',
-                                icon: Icons.mic_none_rounded,
-                                onTap: _therapistUser == null
-                                    ? _showTherapistRequiredSnack
-                                    : () => _openVoiceRecording(_therapistUser!),
-                                muted: _therapistUser == null,
-                              ),
-                            ],
+                          const SizedBox(height: 8),
+                          Text(
+                            'How are you feeling today?',
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                  ),
+                    if (_patient?.avatarUrl != null)
+                      CircleAvatar(
+                        radius: 30,
+                        backgroundImage: NetworkImage(_patient!.avatarUrl!),
+                        backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                      )
+                    else
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primaryContainer,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              color: theme.colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        },
+              ),
+              
+              // Action Cards Grid
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final isWide = width > 600;
+
+                  if (!isWide) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        DashboardActionCard(
+                          title: 'Chat with $aiHandle',
+                          subtitle: 'Your 24/7 AI companion',
+                          icon: Icons.auto_awesome_rounded,
+                          isPrimary: true,
+                          onTap: _openAiTherapist,
+                        ),
+                        const SizedBox(height: 20),
+                        DashboardActionCard(
+                          title: 'Message Therapist',
+                          subtitle: _therapistUser != null ? 'Connected with ${_therapistUser!.firstName}' : 'Connect with your therapist',
+                          icon: Icons.chat_bubble_outline_rounded,
+                          onTap: _therapistUser == null
+                              ? _showTherapistRequiredSnack
+                              : () => _handleMessageTap(_therapistUser!),
+                          isDisabled: _therapistUser == null,
+                          isSecondary: true,
+                          actionLabel: _therapistUser == null ? 'Connect' : null,
+                        ),
+                        const SizedBox(height: 20),
+                        DashboardActionCard(
+                          title: 'Voice Session',
+                          subtitle: 'Record and share your thoughts',
+                          icon: Icons.mic_rounded,
+                          onTap: _therapistUser == null
+                              ? _showTherapistRequiredSnack
+                              : () => _openVoiceRecording(_therapistUser!),
+                          isDisabled: _therapistUser == null,
+                          actionLabel: _therapistUser == null ? 'Connect' : null,
+                        ),
+                        const SizedBox(height: 20),
+                        DashboardActionCard(
+                          title: 'Billing',
+                          subtitle: 'Manage subscription and invoices',
+                          icon: Icons.credit_card_rounded,
+                          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BillingPage())),
+                        ),
+                        const SizedBox(height: 20),
+                        DashboardActionCard(
+                          title: 'Support Center',
+                          subtitle: 'FAQs and help resources',
+                          icon: Icons.help_outline_rounded,
+                          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SupportCenterPage())),
+                        ),
+                      ],
+                    );
+                  }
+
+                  // Tablet/Desktop Layout
+                  return Column(
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: DashboardActionCard(
+                              title: 'Chat with $aiHandle',
+                              subtitle: 'Your 24/7 AI companion',
+                              icon: Icons.auto_awesome_rounded,
+                              isPrimary: true,
+                              onTap: _openAiTherapist,
+                            ),
+                          ),
+                          const SizedBox(width: 24),
+                          Expanded(
+                            child: DashboardActionCard(
+                              title: 'Message Therapist',
+                              subtitle: _therapistUser != null ? 'Connected with ${_therapistUser!.firstName}' : 'Connect with your therapist',
+                              icon: Icons.chat_bubble_outline_rounded,
+                              onTap: _therapistUser == null
+                                  ? _showTherapistRequiredSnack
+                                  : () => _handleMessageTap(_therapistUser!),
+                              isDisabled: _therapistUser == null,
+                              isSecondary: true,
+                              actionLabel: _therapistUser == null ? 'Connect' : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      DashboardActionCard(
+                        title: 'Voice Session',
+                        subtitle: 'Record and share your thoughts',
+                        icon: Icons.mic_rounded,
+                        onTap: _therapistUser == null
+                            ? _showTherapistRequiredSnack
+                            : () => _openVoiceRecording(_therapistUser!),
+                        isDisabled: _therapistUser == null,
+                        actionLabel: _therapistUser == null ? 'Connect' : null,
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: DashboardActionCard(
+                              title: 'Billing',
+                              subtitle: 'Manage subscription and invoices',
+                              icon: Icons.credit_card_rounded,
+                              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BillingPage())),
+                            ),
+                          ),
+                          const SizedBox(width: 24),
+                          Expanded(
+                            child: DashboardActionCard(
+                              title: 'Support Center',
+                              subtitle: 'FAQs and help resources',
+                              icon: Icons.help_outline_rounded,
+                              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SupportCenterPage())),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                }
+              ),
+              
+              const SizedBox(height: 48),
+              
+              // Inspirational / Info Card
+              Container(
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.08)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.format_quote_rounded,
+                        color: theme.colorScheme.tertiary,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Daily Thought',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: theme.colorScheme.tertiary,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '"The only way out is through."',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontStyle: FontStyle.italic,
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 40),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -474,65 +685,20 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      appBar: AppBar(
+        title: Text(
+          'Dashboard',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+        ),
+        centerTitle: true,
+        scrolledUnderElevation: 0,
+        backgroundColor: Colors.transparent,
+      ),
+      drawer: const CommonSettingsDrawer(),
       body: _buildContent(context),
     );
   }
 }
 
-class _DashboardActionCard extends StatelessWidget {
-  final String label;
-  final IconData? icon;
-  final VoidCallback onTap;
-  final bool muted;
-
-  const _DashboardActionCard({
-    required this.label,
-    required this.onTap,
-    this.icon,
-    this.muted = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final background = muted ? const Color(0xFFE8E8E8) : const Color(0xFFD9D9D9);
-    final textColor = muted ? Colors.black54 : Colors.black87;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        splashColor: Colors.black.withOpacity(0.08),
-        highlightColor: Colors.black.withOpacity(0.04),
-        child: Container(
-          width: 180,
-          height: 140,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, color: textColor, size: 32),
-                const SizedBox(height: 12),
-              ],
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+// Action card moved to lib/widgets/dashboard_action_card.dart

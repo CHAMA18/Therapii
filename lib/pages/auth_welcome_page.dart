@@ -9,6 +9,7 @@ import 'package:therapii/auth/firebase_auth_manager.dart';
 import 'package:therapii/services/user_service.dart';
 import 'package:therapii/pages/admin_dashboard_page.dart';
 import 'package:therapii/pages/my_patients_page.dart';
+import 'package:therapii/pages/therapist_dashboard_page.dart';
 import 'package:therapii/pages/patient_dashboard_page.dart';
 import 'package:therapii/pages/patient_onboarding_flow_page.dart';
 import 'package:therapii/pages/patient_welcome_code_page.dart';
@@ -353,7 +354,7 @@ class _CreateAccountFormState extends State<_CreateAccountForm> {
           } else {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
-                builder: (context) => isTherapist ? const MyPatientsPage() : const PatientOnboardingFlowPage(),
+                builder: (context) => isTherapist ? const TherapistDashboardPage() : const PatientOnboardingFlowPage(),
               ),
             );
           }
@@ -524,7 +525,7 @@ class _LoginFormState extends State<_LoginForm> {
             );
           } else if (user.isTherapist) {
             Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const MyPatientsPage()),
+              MaterialPageRoute(builder: (context) => const TherapistDashboardPage()),
             );
           } else {
             final destination = user.patientOnboardingCompleted

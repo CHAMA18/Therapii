@@ -1,8 +1,9 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import 'package:therapii/models/user.dart' as app_user;
@@ -19,30 +20,17 @@ class AiTherapistChatPage extends StatefulWidget {
 }
 
 class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
-  static const String _systemPrompt =
-      'You are KAI, Therapii\'s AI companion. Respond with warmth, empathy, and actionable guidance. '
-      'Keep replies under 6 sentences, reinforce healthy coping techniques, and align with the patient\'s therapist-led goals.';
-
   final UserService _userService = UserService();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final AiCompanionClient _client = const AiCompanionClient();
   StreamSubscription<String>? _responseSubscription;
-  final FlutterTts _flutterTts = FlutterTts();
   final stt.SpeechToText _speechToText = stt.SpeechToText();
   bool _speechAvailable = false;
   bool _isListening = false;
-  bool _isSpeaking = false;
-  List<dynamic> _availableVoices = [];
-  String? _selectedVoice;
-
-  final List<AiChatMessage> _conversation = <AiChatMessage>[
-    const AiChatMessage(
-      role: 'assistant',
-      content:
-          'Hi, I\'m KAI, your Therapii AI companion. I\'m here whenever you need to check in, reflect, or plan your next steps. What\'s on your mind right now?',
-    ),
-  ];
+  
+  String _aiName = 'KAI'; // Default, will be updated from therapist's training profile
+  List<AiChatMessage> _conversation = <AiChatMessage>[];
 
   bool _sending = false;
   bool _loadingContext = true;
@@ -55,168 +43,15 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
   @override
   void initState() {
     super.initState();
-    _initTts();
     _initSpeech();
     _loadPatientContext();
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
-
-  @override
-  void dispose() {
-    _responseSubscription?.cancel();
-    _messageController.dispose();
-    _scrollController.dispose();
-    _flutterTts.stop();
-    super.dispose();
-  }
-
-  List<_DisplayedAiMessage> get _messages => _conversation
-      .map((entry) => _DisplayedAiMessage(role: entry.role, text: entry.content))
-      .toList(growable: false);
-
-  Future<void> _handleSend() async {
-    if (_sending) return;
-    final text = _messageController.text.trim();
-    if (text.isEmpty) return;
-
-    await _responseSubscription?.cancel();
-    _responseSubscription = null;
-
-    FocusScope.of(context).unfocus();
-    _messageController.clear();
-
-    final userMessage = AiChatMessage(role: 'user', content: text);
-    final messages = <AiChatMessage>[
-      AiChatMessage(role: 'system', content: _buildSystemPrompt()),
-      ..._conversation,
-      userMessage,
-    ];
-
-    late final int responseIndex;
-    final buffer = StringBuffer();
-
-    setState(() {
-      _sending = true;
-      _conversation
-        ..add(userMessage)
-        ..add(const AiChatMessage(role: 'assistant', content: ''));
-      responseIndex = _conversation.length - 1;
-    });
-
-    _scrollAfterDelay();
-
-    final stream = _client.sendChatStream(messages: messages);
-    _responseSubscription = stream.listen(
-      (chunk) {
-        if (!mounted) {
-          return;
-        }
-        if (chunk.trim().isEmpty) {
-          return;
-        }
-        buffer.write(chunk);
-        setState(() {
-          _conversation[responseIndex] = AiChatMessage(role: 'assistant', content: buffer.toString());
-        });
-        _scrollAfterDelay();
-      },
-      onError: (error) {
-        if (!mounted) {
-          return;
-        }
-        setState(() {
-          if (_conversation.length > responseIndex) {
-            _conversation.removeAt(responseIndex);
-          }
-          _sending = false;
-        });
-        final message = error is AiChatException
-            ? error.message
-            : 'We couldn\'t reach KAI right now. Please try again.';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
-        );
-        final subscription = _responseSubscription;
-        _responseSubscription = null;
-        subscription?.cancel();
-      },
-      onDone: () {
-        if (!mounted) {
-          return;
-        }
-        if (buffer.isEmpty) {
-          setState(() {
-            if (_conversation.length > responseIndex) {
-              _conversation.removeAt(responseIndex);
-            }
-            _sending = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('The AI companion returned an empty response.')),
-          );
-        } else {
-          setState(() {
-            _sending = false;
-          });
-          _speakResponse(buffer.toString());
-        }
-        final subscription = _responseSubscription;
-        _responseSubscription = null;
-        subscription?.cancel();
-      },
-      cancelOnError: false,
-    );
-  }
-
-  void _scrollAfterDelay() {
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await Future.delayed(const Duration(milliseconds: 120));
-      _scrollToBottom();
-    });
-  }
-
-  void _scrollToBottom() {
-    if (!_scrollController.hasClients) return;
-    _scrollController.animateTo(
-      _scrollController.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
-  }
-
-  Future<void> _loadPatientContext() async {
-    final firebaseUser = firebase_auth.FirebaseAuth.instance.currentUser;
-    if (firebaseUser == null) {
-      setState(() {
-        _loadingContext = false;
-        _contextError = 'You are not signed in. The AI companion will respond with general guidance.';
-      });
-      return;
-    }
-
-    try {
-      final profile = await _userService.getUser(firebaseUser.uid);
-      if (!mounted) return;
-      final context = profile?.patientOnboardingData;
-      final summary = _buildPersonalizationSummary(context);
-      setState(() {
-        _patientProfile = profile;
-        _patientContext = context != null && context.isNotEmpty ? context : null;
-        _personalizationSummary = summary;
-        _loadingContext = false;
-        _contextError = null;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _loadingContext = false;
-        _contextError = 'We couldn\'t load your preferences. Responses may be more general until you refresh.';
-      });
-    }
-  }
-
+  
   String _buildSystemPrompt() {
-    final buffer = StringBuffer(_systemPrompt);
+    final buffer = StringBuffer();
+    buffer.write('You are $_aiName, Therapii\'s AI companion. Respond with warmth, empathy, and actionable guidance. '
+        'Keep replies under 6 sentences, reinforce healthy coping techniques, and align with the patient\'s therapist-led goals.');
 
     final profile = _patientProfile;
     final context = _patientContext;
@@ -287,6 +122,204 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
 
     return buffer.toString();
   }
+
+  @override
+  void dispose() {
+    _responseSubscription?.cancel();
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  List<_DisplayedAiMessage> get _messages => _conversation
+      .map((entry) => _DisplayedAiMessage(role: entry.role, text: entry.content))
+      .toList(growable: false);
+
+  Future<void> _handleSend() async {
+    if (_sending) return;
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
+
+    await _responseSubscription?.cancel();
+    _responseSubscription = null;
+
+    FocusScope.of(context).unfocus();
+    _messageController.clear();
+
+    final userMessage = AiChatMessage(role: 'user', content: text);
+    final messages = <AiChatMessage>[
+      AiChatMessage(role: 'system', content: _buildSystemPrompt()),
+      ..._conversation,
+      userMessage,
+    ];
+
+    late final int responseIndex;
+    final buffer = StringBuffer();
+
+    setState(() {
+      _sending = true;
+      _conversation
+        ..add(userMessage)
+        ..add(const AiChatMessage(role: 'assistant', content: ''));
+      responseIndex = _conversation.length - 1;
+    });
+
+    _scrollAfterDelay();
+
+    final stream = _client.sendChatStream(messages: messages);
+    _responseSubscription = stream.listen(
+      (chunk) {
+        if (!mounted) {
+          return;
+        }
+        if (chunk.trim().isEmpty) {
+          return;
+        }
+        buffer.write(chunk);
+        setState(() {
+          _conversation[responseIndex] = AiChatMessage(role: 'assistant', content: buffer.toString());
+        });
+        _scrollAfterDelay();
+      },
+      onError: (error) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          if (_conversation.length > responseIndex) {
+            _conversation.removeAt(responseIndex);
+          }
+          _sending = false;
+        });
+        final message = error is AiChatException
+            ? error.message
+            : 'We couldn\'t reach $_aiName right now. Please try again.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+        final subscription = _responseSubscription;
+        _responseSubscription = null;
+        subscription?.cancel();
+      },
+      onDone: () {
+        if (!mounted) {
+          return;
+        }
+        if (buffer.isEmpty) {
+          setState(() {
+            if (_conversation.length > responseIndex) {
+              _conversation.removeAt(responseIndex);
+            }
+            _sending = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('The AI companion returned an empty response.')),
+          );
+        } else {
+          setState(() {
+            _sending = false;
+          });
+        }
+        final subscription = _responseSubscription;
+        _responseSubscription = null;
+        subscription?.cancel();
+      },
+      cancelOnError: false,
+    );
+  }
+
+  void _scrollAfterDelay() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future.delayed(const Duration(milliseconds: 120));
+      _scrollToBottom();
+    });
+  }
+
+  void _scrollToBottom() {
+    if (!_scrollController.hasClients) return;
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
+  Future<void> _loadPatientContext() async {
+    final firebaseUser = firebase_auth.FirebaseAuth.instance.currentUser;
+    if (firebaseUser == null) {
+      setState(() {
+        _loadingContext = false;
+        _contextError = 'You are not signed in. The AI companion will respond with general guidance.';
+        _conversation = [
+          AiChatMessage(
+            role: 'assistant',
+            content:
+                'Hi, I\'m $_aiName, your Therapii AI companion. I\'m here whenever you need to check in, reflect, or plan your next steps. What\'s on your mind right now?',
+          ),
+        ];
+      });
+      return;
+    }
+
+    try {
+      final profile = await _userService.getUser(firebaseUser.uid);
+      if (!mounted) return;
+      
+      // Load therapist's AI name
+      String aiName = 'KAI';
+      final therapistId = profile?.therapistId;
+      if (therapistId != null && therapistId.isNotEmpty) {
+        try {
+          final therapistDoc = await FirebaseFirestore.instance.collection('therapists').doc(therapistId).get();
+          if (therapistDoc.exists) {
+            final therapistData = therapistDoc.data();
+            final aiProfile = therapistData?['ai_training_profile'];
+            if (aiProfile is Map<String, dynamic>) {
+              final name = aiProfile['name'];
+              if (name is String && name.isNotEmpty) {
+                aiName = name;
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Failed to load AI name: $e');
+        }
+      }
+      
+      final context = profile?.patientOnboardingData;
+      final summary = _buildPersonalizationSummary(context);
+      setState(() {
+        _aiName = aiName;
+        _patientProfile = profile;
+        _patientContext = context != null && context.isNotEmpty ? context : null;
+        _personalizationSummary = summary;
+        _loadingContext = false;
+        _contextError = null;
+        _conversation = [
+          AiChatMessage(
+            role: 'assistant',
+            content:
+                'Hi, I\'m $_aiName, your Therapii AI companion. I\'m here whenever you need to check in, reflect, or plan your next steps. What\'s on your mind right now?',
+          ),
+        ];
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingContext = false;
+        _contextError = 'We couldn\'t load your preferences. Responses may be more general until you refresh.';
+        _conversation = [
+          AiChatMessage(
+            role: 'assistant',
+            content:
+                'Hi, I\'m $_aiName, your Therapii AI companion. I\'m here whenever you need to check in, reflect, or plan your next steps. What\'s on your mind right now?',
+          ),
+        ];
+      });
+    }
+  }
+
+
 
   String? _buildPersonalizationSummary(Map<String, dynamic>? context) {
     if (context == null || context.isEmpty) {
@@ -371,7 +404,7 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Personalizing KAI with your preferences…',
+                  'Personalizing $_aiName with your preferences…',
                   style: theme.textTheme.bodyMedium,
                 ),
               ),
@@ -447,7 +480,7 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
-        title: const Text('Chat with KAI'),
+        title: Text('Chat with $_aiName'),
         centerTitle: true,
         actions: [
           Padding(
@@ -466,7 +499,7 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
           ),
         ],
       ),
-      drawer: _buildDrawer(context),
+      // Drawer removed as Text-to-Speech is no longer supported here
       body: SafeArea(
         child: Column(
           children: [
@@ -565,22 +598,6 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  if (_isSpeaking)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: SizedBox(
-                        height: 46,
-                        width: 46,
-                        child: FilledButton.tonal(
-                          onPressed: _stopSpeaking,
-                          style: FilledButton.styleFrom(
-                            shape: const CircleBorder(),
-                            padding: EdgeInsets.zero,
-                          ),
-                          child: const Icon(Icons.volume_off, size: 20),
-                        ),
-                      ),
-                    ),
                   SizedBox(
                     height: 46,
                     width: 46,
@@ -616,178 +633,7 @@ class _DisplayedAiMessage {
   final String text;
 }
 
-extension _VoiceActions on _AiTherapistChatPageState {
-  Future<void> _initTts() async {
-    await _flutterTts.setLanguage('en-US');
-    await _flutterTts.setPitch(1.0);
-    await _flutterTts.setSpeechRate(0.5);
-    
-    // Load available voices
-    await _loadAvailableVoices();
-    
-    // Set preferred voice if available
-    await _setVoice();
-    
-    _flutterTts.setStartHandler(() {
-      if (mounted) {
-        setState(() => _isSpeaking = true);
-      }
-    });
-    
-    _flutterTts.setCompletionHandler(() {
-      if (mounted) {
-        setState(() => _isSpeaking = false);
-      }
-    });
-    
-    _flutterTts.setErrorHandler((msg) {
-      if (mounted) {
-        setState(() => _isSpeaking = false);
-      }
-    });
-  }
-
-  Future<void> _loadAvailableVoices() async {
-    try {
-      final voices = await _flutterTts.getVoices;
-      if (mounted && voices is List) {
-        setState(() => _availableVoices = voices);
-      }
-    } catch (e) {
-      // Silently fail - voice selection is optional
-    }
-  }
-
-  Future<void> _setVoice() async {
-    if (_selectedVoice != null && _selectedVoice!.isNotEmpty) {
-      try {
-        await _flutterTts.setVoice({'name': _selectedVoice!, 'locale': 'en-US'});
-      } catch (e) {
-        // Silently fail - will use default voice
-      }
-    }
-  }
-
-  Widget _buildDrawer(BuildContext context) {
-    final theme = Theme.of(context);
-    
-    return Drawer(
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Row(
-                children: [
-                  Icon(Icons.record_voice_over, color: theme.colorScheme.primary, size: 28),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Voice Settings',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                'Choose how KAI sounds when reading responses aloud',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Divider(),
-            if (_availableVoices.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.mic_off,
-                      size: 48,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'No voices available',
-                      style: theme.textTheme.bodyLarge,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Text-to-speech voices are not available on this device.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              )
-            else
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: _availableVoices.length + 1,
-                  itemBuilder: (context, index) {
-                    if (index == 0) {
-                      // Default voice option
-                      return RadioListTile<String?>(
-                        value: null,
-                        groupValue: _selectedVoice,
-                        title: const Text('Default Voice'),
-                        subtitle: const Text('System default'),
-                        selected: _selectedVoice == null,
-                        onChanged: (value) async {
-                          setState(() => _selectedVoice = null);
-                          await _flutterTts.setLanguage('en-US');
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Voice reset to default')),
-                          );
-                        },
-                      );
-                    }
-                    
-                    final voiceIndex = index - 1;
-                    final voice = _availableVoices[voiceIndex];
-                    final voiceName = voice is Map ? (voice['name'] ?? 'Voice $voiceIndex') : 'Voice $voiceIndex';
-                    final voiceLocale = voice is Map ? (voice['locale'] ?? '') : '';
-                    final isSelected = _selectedVoice == voiceName;
-                    
-                    // Filter to English voices only
-                    if (voice is Map && voiceLocale is String && !voiceLocale.toLowerCase().startsWith('en')) {
-                      return const SizedBox.shrink();
-                    }
-                    
-                    return RadioListTile<String>(
-                      value: voiceName,
-                      groupValue: _selectedVoice,
-                      title: Text(voiceName),
-                      subtitle: voiceLocale.isNotEmpty ? Text(voiceLocale) : null,
-                      selected: isSelected,
-                      onChanged: (value) async {
-                        setState(() => _selectedVoice = value);
-                        await _setVoice();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Voice changed to $voiceName')),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
+extension _SpeechActions on _AiTherapistChatPageState {
   Future<void> _initSpeech() async {
     try {
       final available = await _speechToText.initialize(
@@ -846,21 +692,6 @@ extension _VoiceActions on _AiTherapistChatPageState {
       );
     }
   }
-
-  Future<void> _speakResponse(String text) async {
-    if (text.isEmpty || _isSpeaking) return;
-    
-    try {
-      await _flutterTts.speak(text);
-    } catch (e) {
-      // Silently fail - TTS is optional
-    }
-  }
-
-  Future<void> _stopSpeaking() async {
-    await _flutterTts.stop();
-    setState(() => _isSpeaking = false);
-  }
 }
 
 extension _SummaryActions on _AiTherapistChatPageState {
@@ -915,7 +746,7 @@ extension _SummaryActions on _AiTherapistChatPageState {
         AiChatMessage(role: 'user', content: 'Transcript of the patient-AI conversation:\n$transcript'),
       ];
       // Prefer Chat Completions for summarization to avoid Responses-proxy schema mismatches
-      final summary = await _client.sendChat(messages: messages, maxOutputTokens: 500, preferChatCompletions: true);
+      final summary = await _client.sendChat(messages: messages, maxOutputTokens: 2000, preferChatCompletions: true);
       // ignore: avoid_print
       print('[AI-SUMMARY] summary generated length=${summary.length}');
 
