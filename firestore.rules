@@ -145,6 +145,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Admin settings (OpenAI config, email config, etc.) - only admins can access
+    match /admin_settings/{document=**} {
+      allow read, write: if isAdmin();
+    }
+
     // Deny everything else by default
     match /{document=**} {
       allow read, write: if false;

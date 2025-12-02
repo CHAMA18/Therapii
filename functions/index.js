@@ -908,7 +908,9 @@ exports.getAcceptedInvitationsForPatient = functions.https.onCall(async (data, c
  * Create Stripe Checkout Session for subscription
  * Keeps secret key secure server-side
  */
-exports.createStripeCheckoutSession = functions.https.onCall(async (data, context) => {
+exports.createStripeCheckoutSession = functions
+  .runWith({ secrets: ['STRIPE_SECRET_KEY'] })
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
   }
@@ -988,9 +990,228 @@ exports.createStripeCheckoutSession = functions.https.onCall(async (data, contex
 });
 
 /**
+ * Fetch billing details from Stripe for the authenticated user
+ * Returns subscription status, credit balance, payment method, and coupon info
+ */
+exports.getStripeBillingDetails = functions
+  .runWith({ secrets: ['STRIPE_SECRET_KEY'] })
+  .https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
+  }
+
+  const userId = context.auth.uid;
+
+  try {
+    const stripe = getStripe();
+    
+    // Get user's Stripe customer ID
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      return {
+        isPaidUser: false,
+        planName: 'Free Plan',
+        creditBalance: 0,
+        paymentMethod: null,
+        subscriptionStatus: null,
+        nextBillingDate: null,
+        appliedCoupon: null,
+      };
+    }
+
+    const userData = userDoc.data();
+    const customerId = userData.stripe_customer_id;
+
+    if (!customerId) {
+      return {
+        isPaidUser: false,
+        planName: 'Free Plan',
+        creditBalance: 0,
+        paymentMethod: null,
+        subscriptionStatus: null,
+        nextBillingDate: null,
+        appliedCoupon: null,
+      };
+    }
+
+    // Fetch customer data including credit balance
+    const customer = await stripe.customers.retrieve(customerId, {
+      expand: ['sources', 'invoice_settings.default_payment_method'],
+    });
+
+    // Fetch active subscriptions
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: 'active',
+      limit: 1,
+    });
+
+    const hasActiveSubscription = subscriptions.data.length > 0;
+    const subscription = subscriptions.data[0] || null;
+
+    // Get payment method details
+    let paymentMethod = null;
+    if (customer.invoice_settings?.default_payment_method) {
+      const pm = typeof customer.invoice_settings.default_payment_method === 'string'
+        ? await stripe.paymentMethods.retrieve(customer.invoice_settings.default_payment_method)
+        : customer.invoice_settings.default_payment_method;
+      
+      if (pm && pm.card) {
+        paymentMethod = {
+          brand: pm.card.brand,
+          last4: pm.card.last4,
+          expMonth: pm.card.exp_month,
+          expYear: pm.card.exp_year,
+        };
+      }
+    }
+
+    // Get applied coupon/discount
+    let appliedCoupon = null;
+    if (subscription?.discount?.coupon) {
+      const coupon = subscription.discount.coupon;
+      appliedCoupon = {
+        code: subscription.discount.promotion_code || coupon.id,
+        name: coupon.name || coupon.id,
+        percentOff: coupon.percent_off,
+        amountOff: coupon.amount_off ? coupon.amount_off / 100 : null,
+      };
+    }
+
+    // Credit balance is stored as negative cents in Stripe (negative = credit)
+    const creditBalance = customer.balance ? Math.abs(customer.balance) / 100 : 0;
+
+    return {
+      isPaidUser: hasActiveSubscription,
+      planName: hasActiveSubscription ? 'Platinum Plan' : 'Free Plan',
+      creditBalance: creditBalance,
+      paymentMethod: paymentMethod,
+      subscriptionStatus: subscription?.status || null,
+      nextBillingDate: subscription?.current_period_end 
+        ? new Date(subscription.current_period_end * 1000).toISOString() 
+        : null,
+      appliedCoupon: appliedCoupon,
+    };
+  } catch (error) {
+    console.error('Error fetching Stripe billing details:', error);
+    
+    if (error?.message?.includes('STRIPE_SECRET_KEY')) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Stripe is not configured. Please configure STRIPE_SECRET_KEY in Firebase secrets.'
+      );
+    }
+    
+    throw new functions.https.HttpsError(
+      'internal',
+      `Failed to fetch billing details: ${error?.message || error}`
+    );
+  }
+});
+
+/**
+ * Redeem a Stripe promotion/coupon code
+ */
+exports.redeemStripeCode = functions
+  .runWith({ secrets: ['STRIPE_SECRET_KEY'] })
+  .https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
+  }
+
+  const userId = context.auth.uid;
+  const code = typeof data?.code === 'string' ? data.code.trim() : '';
+
+  if (!code) {
+    throw new functions.https.HttpsError('invalid-argument', 'code is required');
+  }
+
+  try {
+    const stripe = getStripe();
+    
+    // Get user's Stripe customer ID
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      throw new functions.https.HttpsError('failed-precondition', 'User not found');
+    }
+
+    const userData = userDoc.data();
+    let customerId = userData.stripe_customer_id;
+
+    // Create customer if doesn't exist
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: context.auth.token.email || '',
+        metadata: { userId: userId },
+      });
+      customerId = customer.id;
+      await admin.firestore().collection('users').doc(userId).update({
+        stripe_customer_id: customerId,
+      });
+    }
+
+    // Try to find promotion code first
+    const promoCodes = await stripe.promotionCodes.list({
+      code: code,
+      active: true,
+      limit: 1,
+    });
+
+    if (promoCodes.data.length > 0) {
+      const promoCode = promoCodes.data[0];
+      const coupon = promoCode.coupon;
+
+      // Check if coupon gives credit (amount_off)
+      if (coupon.amount_off) {
+        // Add credit to customer balance
+        await stripe.customers.update(customerId, {
+          balance: -(coupon.amount_off), // Negative = credit in Stripe
+        });
+
+        return {
+          success: true,
+          type: 'credit',
+          amount: coupon.amount_off / 100,
+          message: `\$${(coupon.amount_off / 100).toFixed(2)} credit added to your account!`,
+        };
+      } else if (coupon.percent_off) {
+        // This is a percentage discount, would need to apply to subscription
+        return {
+          success: true,
+          type: 'discount',
+          percentOff: coupon.percent_off,
+          message: `${coupon.percent_off}% discount code validated! Apply it during checkout.`,
+          promoCodeId: promoCode.id,
+        };
+      }
+    }
+
+    throw new functions.https.HttpsError('not-found', 'Invalid or expired code');
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    
+    console.error('Error redeeming code:', error);
+    
+    if (error?.message?.includes('STRIPE_SECRET_KEY')) {
+      throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Stripe is not configured. Please configure STRIPE_SECRET_KEY in Firebase secrets.'
+      );
+    }
+    
+    throw new functions.https.HttpsError(
+      'internal',
+      `Failed to redeem code: ${error?.message || error}`
+    );
+  }
+});
+
+/**
  * Fetch invoices from Stripe for the authenticated user
  */
-exports.getStripeInvoices = functions.https.onCall(async (data, context) => {
+exports.getStripeInvoices = functions
+  .runWith({ secrets: ['STRIPE_SECRET_KEY'] })
+  .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
   }
