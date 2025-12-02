@@ -292,14 +292,21 @@ class _EditProfilePageState extends State<EditProfilePage> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Edit Profile'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text('Edit Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
         centerTitle: true,
         backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: _Header(
+      backgroundColor: const Color(0xFFF7F8FA),
+      body: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        child: Column(
+          children: [
+            _Header(
               emailMasked: emailMasked,
               displayName: _profile?.fullName,
               avatarBytes: _avatarPreviewBytes,
@@ -308,10 +315,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
               isUploading: _uploadingAvatar,
               onPickAvatar: (_loadingProfile || _uploadingAvatar) ? null : _pickAvatar,
             ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
               child: _SectionCard(
                 icon: Icons.alternate_email,
                 title: 'Change email / username',
@@ -327,6 +332,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           labelText: 'New email',
                           prefixIcon: Icon(Icons.email_outlined, color: scheme.primary),
                           filled: true,
+                          fillColor: const Color(0xFFF0F4F8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: scheme.primary, width: 1.5)),
                         ),
                         validator: (v) {
                           final value = (v ?? '').trim();
@@ -335,7 +344,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 14),
                       TextFormField(
                         controller: _currentPassForEmailCtrl,
                         obscureText: !_showCurrentPassForEmail,
@@ -343,49 +352,41 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           labelText: 'Current password (for verification)',
                           prefixIcon: Icon(Icons.lock_outline, color: scheme.primary),
                           filled: true,
+                          fillColor: const Color(0xFFF0F4F8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: scheme.primary, width: 1.5)),
                           suffixIcon: IconButton(
-                            icon: AnimatedRotation(
-                              duration: const Duration(milliseconds: 180),
-                              turns: _showCurrentPassForEmail ? 0.25 : 0,
-                              child: Icon(_showCurrentPassForEmail ? Icons.visibility_off : Icons.visibility, color: scheme.primary),
-                            ),
+                            icon: Icon(_showCurrentPassForEmail ? Icons.visibility_off : Icons.visibility, color: scheme.primary),
                             onPressed: () => setState(() => _showCurrentPassForEmail = !_showCurrentPassForEmail),
                           ),
                         ),
                         validator: (v) => (v ?? '').length < 6 ? 'Enter your current password' : null,
                       ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: PrimaryButton(
-                              label: 'Send verification',
-                              leadingIcon: Icons.mark_email_read_outlined,
-                              isLoading: _emailUpdating,
-                              onPressed: _emailUpdating ? null : _handleUpdateEmail,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                           'We’ll email a verification link to your new address. After you verify, your email will update automatically.',
-                          style: theme.textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        child: PrimaryButton(
+                          label: 'Send verification',
+                          leadingIcon: Icons.mark_email_read_outlined,
+                          isLoading: _emailUpdating,
+                          onPressed: _emailUpdating ? null : _handleUpdateEmail,
                         ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        "We'll email a verification link to your new address. After you verify, your email will update automatically.",
+                        style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, height: 1.5),
                       ),
                     ],
                   ),
                 ),
               ),
             ),
-          ),
-          SliverToBoxAdapter(child: SizedBox(height: 16)),
-          // Password section
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+            const SizedBox(height: 20),
+            // Password section
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
               child: _SectionCard(
                 icon: Icons.password,
                 title: 'Change password',
@@ -401,18 +402,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           labelText: 'Current password',
                           prefixIcon: Icon(Icons.lock_outline, color: scheme.primary),
                           filled: true,
+                          fillColor: const Color(0xFFF0F4F8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: scheme.primary, width: 1.5)),
                           suffixIcon: IconButton(
-                            icon: AnimatedRotation(
-                              duration: const Duration(milliseconds: 180),
-                              turns: _showCurrentPass ? 0.25 : 0,
-                              child: Icon(_showCurrentPass ? Icons.visibility_off : Icons.visibility, color: scheme.primary),
-                            ),
+                            icon: Icon(_showCurrentPass ? Icons.visibility_off : Icons.visibility, color: scheme.primary),
                             onPressed: () => setState(() => _showCurrentPass = !_showCurrentPass),
                           ),
                         ),
                         validator: (v) => (v ?? '').length < 6 ? 'Enter your current password' : null,
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 14),
                       TextFormField(
                         controller: _newPassCtrl,
                         obscureText: !_showNewPass,
@@ -420,12 +421,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           labelText: 'New password',
                           prefixIcon: Icon(Icons.lock, color: scheme.primary),
                           filled: true,
+                          fillColor: const Color(0xFFF0F4F8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: scheme.primary, width: 1.5)),
                           suffixIcon: IconButton(
-                            icon: AnimatedRotation(
-                              duration: const Duration(milliseconds: 180),
-                              turns: _showNewPass ? 0.25 : 0,
-                              child: Icon(_showNewPass ? Icons.visibility_off : Icons.visibility, color: scheme.primary),
-                            ),
+                            icon: Icon(_showNewPass ? Icons.visibility_off : Icons.visibility, color: scheme.primary),
                             onPressed: () => setState(() => _showNewPass = !_showNewPass),
                           ),
                         ),
@@ -436,11 +437,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
                         },
                       ),
                       if (_newPassCtrl.text.isNotEmpty) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 12),
                         _PasswordStrengthBar(value: _passStrength, label: _passLabel),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 14),
                       ] else
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 14),
                       TextFormField(
                         controller: _confirmPassCtrl,
                         obscureText: !_showConfirmPass,
@@ -448,12 +449,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           labelText: 'Confirm new password',
                           prefixIcon: Icon(Icons.lock, color: scheme.primary),
                           filled: true,
+                          fillColor: const Color(0xFFF0F4F8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: scheme.primary, width: 1.5)),
                           suffixIcon: IconButton(
-                            icon: AnimatedRotation(
-                              duration: const Duration(milliseconds: 180),
-                              turns: _showConfirmPass ? 0.25 : 0,
-                              child: Icon(_showConfirmPass ? Icons.visibility_off : Icons.visibility, color: scheme.primary),
-                            ),
+                            icon: Icon(_showConfirmPass ? Icons.visibility_off : Icons.visibility, color: scheme.primary),
                             onPressed: () => setState(() => _showConfirmPass = !_showConfirmPass),
                           ),
                         ),
@@ -462,20 +463,23 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 16),
-                      PrimaryButton(
-                        label: 'Update password',
-                        leadingIcon: Icons.check_circle_outline,
-                        isLoading: _changingPassword,
-                        onPressed: _changingPassword ? null : _handleChangePassword,
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: PrimaryButton(
+                          label: 'Update password',
+                          leadingIcon: Icons.check_circle_outline,
+                          isLoading: _changingPassword,
+                          onPressed: _changingPassword ? null : _handleChangePassword,
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -516,7 +520,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 }
 
-// Header with gradient and curved bottom
+// Header with gradient background - centered layout
 class _Header extends StatelessWidget {
   final String emailMasked;
   final String? displayName;
@@ -543,7 +547,7 @@ class _Header extends StatelessWidget {
     final scheme = theme.colorScheme;
     final hasEmail = emailMasked.trim().isNotEmpty;
     final trimmedName = displayName?.trim();
-    final headerTitle = (trimmedName != null && trimmedName.isNotEmpty) ? trimmedName : 'Edit Profile';
+    final headerTitle = (trimmedName != null && trimmedName.isNotEmpty) ? trimmedName : 'Your Profile';
 
     final hasBytes = avatarBytes != null && avatarBytes!.isNotEmpty;
     final hasUrl = (avatarUrl ?? '').isNotEmpty;
@@ -553,61 +557,61 @@ class _Header extends StatelessWidget {
     final showSpinner = isLoading && imageProvider == null && !hasBytes;
 
     final baseAvatar = CircleAvatar(
-      radius: 36,
+      radius: 44,
       backgroundColor: scheme.onPrimary.withValues(alpha: 0.18),
       backgroundImage: showSpinner ? null : imageProvider,
       child: showSpinner
           ? SizedBox(
-              width: 24,
-              height: 24,
+              width: 26,
+              height: 26,
               child: CircularProgressIndicator(
                 strokeWidth: 3,
                 valueColor: AlwaysStoppedAnimation<Color>(scheme.onPrimary),
               ),
             )
           : (imageProvider == null
-              ? Icon(Icons.person, color: scheme.onPrimary, size: 36)
+              ? Icon(Icons.person, color: scheme.onPrimary, size: 44)
               : null),
     );
 
     Widget avatar = SizedBox(
-      width: 72,
-      height: 72,
+      width: 88,
+      height: 88,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(child: baseAvatar),
           if (onPickAvatar != null)
             Positioned(
-              bottom: -4,
-              right: -4,
+              bottom: 2,
+              right: 2,
               child: Container(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: scheme.onPrimary,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: scheme.onPrimary.withValues(alpha: 0.45),
-                      blurRadius: 6,
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-                child: Icon(Icons.edit, size: 16, color: scheme.primary),
+                child: Icon(Icons.camera_alt, size: 18, color: scheme.primary),
               ),
             ),
           if (isUploading)
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: scheme.onPrimary.withValues(alpha: 0.2),
+                  color: scheme.onPrimary.withValues(alpha: 0.25),
                   shape: BoxShape.circle,
                 ),
                 child: Center(
                   child: SizedBox(
-                    width: 28,
-                    height: 28,
+                    width: 30,
+                    height: 30,
                     child: CircularProgressIndicator(
                       strokeWidth: 3,
                       valueColor: AlwaysStoppedAnimation<Color>(scheme.primary),
@@ -631,109 +635,65 @@ class _Header extends StatelessWidget {
       );
     }
 
-    final helperKey = ValueKey('${isUploading}_helper');
-
-    return Stack(
-      children: [
-        Container(
-          height: 190,
-          decoration: BoxDecoration(
-            gradient: gradient,
-          ),
-        ),
-        ClipPath(
-          clipper: _BottomCurveClipper(),
-          child: Container(
-            height: 190,
-            decoration: BoxDecoration(
-              gradient: gradient,
-            ),
-          ),
-        ),
-        Container(
-          height: 190,
-          padding: const EdgeInsets.fromLTRB(20, 96, 20, 24),
-          alignment: Alignment.bottomLeft,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+    return Container(
+      decoration: BoxDecoration(gradient: gradient),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               avatar,
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      headerTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        color: scheme.onPrimary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Update your profile photo, email, and password',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onPrimary.withValues(alpha: 0.9),
-                      ),
-                    ),
-                    if (onPickAvatar != null)
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        child: Text(
-                          isUploading ? 'Uploading photo...' : 'Tap the photo to change it',
-                          key: helperKey,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: scheme.onPrimary.withValues(alpha: 0.85),
-                          ),
-                        ),
-                      ),
-                    if (hasEmail) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Signed in as $emailMasked',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: scheme.onPrimary.withValues(alpha: 0.85),
-                        ),
-                      ),
-                    ],
-                  ],
+              const SizedBox(height: 16),
+              Text(
+                headerTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  color: scheme.onPrimary,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
+              const SizedBox(height: 8),
+              Text(
+                'Update your profile photo, email, and password',
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: scheme.onPrimary.withValues(alpha: 0.9),
+                ),
+              ),
+              if (hasEmail) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: scheme.onPrimary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Text(
+                    'Signed in as $emailMasked',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: scheme.onPrimary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
 
-class _BottomCurveClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.lineTo(0, size.height - 36);
-    path.quadraticBezierTo(size.width * 0.25, size.height, size.width * 0.5, size.height);
-    path.quadraticBezierTo(size.width * 0.75, size.height, size.width, size.height - 36);
-    path.lineTo(size.width, 0);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
-}
-
-// Section card with subtle glass effect
+// Section card with clean modern styling
 class _SectionCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -750,15 +710,20 @@ class _SectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
+    return Container(
       decoration: BoxDecoration(
-        color: scheme.surface,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: scheme.outline.withValues(alpha: 0.12)),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -766,30 +731,41 @@ class _SectionCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                height: 40,
-                width: 40,
+                height: 48,
+                width: 48,
                 decoration: BoxDecoration(
-                  color: scheme.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  color: scheme.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
                 ),
-                child: Icon(icon, color: scheme.primary),
+                child: Icon(icon, color: scheme.primary, size: 24),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                    Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                      ),
+                    ),
                     if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(subtitle!, style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
                     ],
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
           child,
         ],
       ),

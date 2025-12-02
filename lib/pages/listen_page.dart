@@ -4,17 +4,14 @@ import 'package:therapii/auth/firebase_auth_manager.dart';
 import 'package:therapii/models/chat_conversation.dart';
 import 'package:therapii/models/user.dart' as app_user;
 import 'package:therapii/models/voice_checkin.dart';
-import 'package:therapii/models/ai_conversation_summary.dart';
 import 'package:therapii/pages/auth_welcome_page.dart';
 import 'package:therapii/pages/my_patients_page.dart';
 import 'package:therapii/pages/patient_chat_page.dart';
-import 'package:therapii/pages/ai_summary_detail_page.dart';
 import 'package:therapii/pages/therapist_voice_conversation_page.dart';
 import 'package:therapii/services/chat_service.dart';
 import 'package:therapii/services/invitation_service.dart';
 import 'package:therapii/services/user_service.dart';
 import 'package:therapii/services/voice_checkin_service.dart';
-import 'package:therapii/services/ai_conversation_service.dart';
 import 'package:therapii/widgets/shimmer_widgets.dart';
 import 'package:therapii/widgets/common_settings_drawer.dart';
 
@@ -30,7 +27,6 @@ class _ListenPageState extends State<ListenPage> {
   final _userService = UserService();
   final _chatService = ChatService();
   final _voiceService = VoiceCheckinService();
-  final _aiService = AiConversationService();
 
   bool _loading = true;
   String? _error;
@@ -204,229 +200,6 @@ class _ListenPageState extends State<ListenPage> {
   }
 
 
-  Widget _buildHeroCard(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final therapist = _therapistUser;
-    final authUser = FirebaseAuthManager().currentUser;
-
-    String resolveName() {
-      final firstName = therapist?.firstName.trim() ?? '';
-      if (firstName.isNotEmpty) return firstName;
-      final fullName = therapist?.fullName.trim() ?? '';
-      if (fullName.isNotEmpty) return fullName;
-      final email = therapist?.email.trim().isNotEmpty == true
-          ? therapist!.email
-          : authUser?.email ?? '';
-      if (email.isNotEmpty) return email;
-      return 'Therapist';
-    }
-
-    final displayName = resolveName();
-    final fallbackInitial = () {
-      final email = authUser?.email ?? '';
-      if (email.isEmpty) return 'T';
-      final chars = email.characters;
-      return chars.isNotEmpty ? chars.first.toUpperCase() : 'T';
-    }();
-    final initials = displayName.characters.isNotEmpty
-        ? displayName.characters.first.toUpperCase()
-        : fallbackInitial;
-    final patientCount = _activePatients.length;
-
-    String summary() {
-      if (_loading) {
-        return 'Gathering the latest updates from your patients and AI copilot. Hang tight for a moment.';
-      }
-      if (patientCount == 0) {
-        return 'Invite patients to Therapii to unlock voice updates, transcripts, and real-time messaging in one place.';
-      }
-      final label = patientCount == 1 ? 'active patient' : 'active patients';
-      return 'You are supporting $patientCount $label. Tap any card below to continue exactly where you left off.';
-    }
-
-    ButtonStyle buildButtonStyle({
-      required Color background,
-      required Color foreground,
-      Color? disabledBackground,
-      Color? disabledForeground,
-    }) {
-      return FilledButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-        textStyle: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-      ).copyWith(
-        backgroundColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.disabled)) {
-            return disabledBackground ?? background.withOpacity(0.6);
-          }
-          return background;
-        }),
-        foregroundColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.disabled)) {
-            return disabledForeground ?? foreground.withOpacity(0.6);
-          }
-          return foreground;
-        }),
-        overlayColor: MaterialStatePropertyAll(Colors.white.withOpacity(0.08)),
-      );
-    }
-
-    Widget decorativeOrb({
-      required double size,
-      required Alignment alignment,
-      required double opacity,
-    }) {
-      final base = Color.lerp(scheme.primary, Colors.black, 0.45) ?? scheme.primary;
-      return Align(
-        alignment: alignment,
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: base.withOpacity(opacity),
-            boxShadow: [
-              BoxShadow(color: base.withOpacity(opacity * 0.6), blurRadius: 40, spreadRadius: 12),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color.lerp(scheme.primary, Colors.black, 0.35) ?? scheme.primary,
-              Color.lerp(scheme.primaryContainer, scheme.secondary, 0.25) ?? scheme.primaryContainer,
-              Color.lerp(scheme.secondary, scheme.surface, 0.06) ?? scheme.secondary,
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Color.lerp(scheme.primary, Colors.black, 0.55)?.withOpacity(0.32) ?? scheme.primary.withOpacity(0.32),
-              blurRadius: 60,
-              offset: const Offset(0, 26),
-              spreadRadius: -12,
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            decorativeOrb(size: 240, alignment: const Alignment(1.1, -1.1), opacity: 0.16),
-            decorativeOrb(size: 180, alignment: const Alignment(-1.2, 1.1), opacity: 0.1),
-            Container(
-              padding: const EdgeInsets.fromLTRB(28, 28, 28, 26),
-              foregroundDecoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.black.withOpacity(0.14), Colors.transparent],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 66,
-                        height: 66,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.2),
-                          border: Border.all(color: Colors.white.withOpacity(0.38)),
-                        ),
-                        child: Center(
-                          child: Text(
-                            initials,
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Welcome back, $displayName',
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                                letterSpacing: -0.4,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              summary(),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: Colors.white.withOpacity(0.86),
-                                height: 1.55,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 26),
-                  Wrap(
-                    spacing: 14,
-                    runSpacing: 12,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: () => _loadActivePatients(),
-                        style: buildButtonStyle(
-                          background: Color.lerp(scheme.primary, Colors.black, 0.42) ?? scheme.primary,
-                          foreground: Colors.white,
-                        ),
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('Refresh'),
-                      ),
-                      FilledButton.icon(
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const MyPatientsPage()),
-                        ),
-                        style: buildButtonStyle(
-                          background: Color.lerp(scheme.primaryContainer, Colors.black, 0.32) ?? scheme.primaryContainer,
-                          foreground: Color.lerp(scheme.onPrimaryContainer, Colors.white, 0.75) ?? Colors.white,
-                          disabledBackground: Color.lerp(scheme.primaryContainer, Colors.black, 0.12),
-                          disabledForeground: Color.lerp(scheme.onPrimaryContainer, Colors.white, 0.45),
-                        ),
-                        icon: const Icon(Icons.chat_bubble_outline),
-                        label: const Text('Open chat'),
-                      ),
-                      FilledButton.icon(
-                        onPressed: _activePatients.isEmpty ? null : _startTherapistRecordingFlow,
-                        style: buildButtonStyle(
-                          background: Color.lerp(scheme.primary, Colors.black, 0.18) ?? scheme.primary,
-                          foreground: Colors.white,
-                          disabledBackground: Color.lerp(scheme.primary, Colors.black, 0.08),
-                        ),
-                        icon: const Icon(Icons.mic_outlined),
-                        label: const Text('Recorded conversation'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildErrorCard(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -508,175 +281,194 @@ class _ListenPageState extends State<ListenPage> {
   Widget _buildSectionCard({
     required BuildContext context,
     required IconData icon,
+    required Color iconColor,
     required String title,
     String? subtitle,
     Widget? headerAction,
-    Color? accentColor,
-    required Widget child,
+    Widget? child,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final accent = accentColor ?? scheme.primary;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Color.lerp(scheme.surface, scheme.primaryContainer.withOpacity(0.32), 0.18) ?? scheme.surface,
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: scheme.outline.withOpacity(0.08)),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 38, offset: const Offset(0, 24), spreadRadius: -10),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(26, 26, 26, 28),
-          child: Column(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.black.withOpacity(0.05)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    height: 48,
-                    width: 48,
-                    decoration: BoxDecoration(
-                      color: accent.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(icon, color: accent),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                        if (subtitle != null) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            subtitle,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                              height: 1.55,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  if (headerAction != null) ...[
-                    const SizedBox(width: 12),
-                    headerAction,
-                  ],
-                ],
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: iconColor, size: 28),
               ),
-              const SizedBox(height: 22),
-              child,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 20,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (headerAction != null) ...[
+                const SizedBox(width: 12),
+                headerAction,
+              ],
             ],
           ),
-        ),
+          if (child != null) ...[
+            const SizedBox(height: 20),
+            child,
+          ],
+        ],
       ),
     );
   }
 
   Widget _buildActivePatientsCard(BuildContext context) {
+    final theme = Theme.of(context);
     final patientCount = _activePatients.length;
     final subtitle = _loading
-        ? 'Syncing your patient roster and chat history. This only takes a moment.'
+        ? 'Syncing your patient roster and chat history.'
         : patientCount == 0
             ? 'No active patients yet. Share an invitation code to begin collaborating.'
-            : 'You currently support $patientCount ${patientCount == 1 ? 'patient' : 'patients'}. Tap a profile to open their space.';
-
-    Widget body;
-    if (_loading) {
-      body = Column(
-        children: const [
-          ShimmerListTile(),
-          SizedBox(height: 12),
-          ShimmerListTile(),
-        ],
-      );
-    } else if (patientCount == 0) {
-      body = Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.black.withOpacity(0.05)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Share your therapist invitation code from the My Patients hub to connect with clients instantly.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.55),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                FilledButton.icon(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const MyPatientsPage()),
-                  ),
-                  icon: const Icon(Icons.key_outlined),
-                  label: const Text('Generate invite'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () => _loadActivePatients(),
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Refresh'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    } else {
-      final tiles = <Widget>[];
-      for (var i = 0; i < _activePatients.length; i++) {
-        tiles.add(_buildPatientTile(_activePatients[i]));
-        if (i != _activePatients.length - 1) {
-          tiles.add(const SizedBox(height: 12));
-        }
-      }
-      body = Column(children: tiles);
-    }
+            : null;
 
     return _buildSectionCard(
       context: context,
-      icon: Icons.health_and_safety_outlined,
+      icon: Icons.shield_outlined,
+      iconColor: Colors.blue,
       title: 'Active patients',
       subtitle: subtitle,
       headerAction: OutlinedButton.icon(
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const MyPatientsPage()),
         ),
-        icon: const Icon(Icons.people_outline),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        ),
+        icon: const Icon(Icons.people_outline, size: 18),
         label: const Text('Manage'),
       ),
-      child: body,
+      child: _loading
+          ? const Column(
+              children: [
+                ShimmerListTile(),
+                SizedBox(height: 12),
+                ShimmerListTile(),
+              ],
+            )
+          : patientCount == 0
+              ? null
+              : Column(
+                  children: [
+                    for (var i = 0; i < _activePatients.length; i++) ...[
+                      _buildPatientTile(_activePatients[i]),
+                      if (i != _activePatients.length - 1) const SizedBox(height: 12),
+                    ],
+                  ],
+                ),
+    );
+  }
+
+  Widget _buildInvitationCard(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.black.withOpacity(0.05)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Share your therapist invitation code from the My Patients hub to connect with clients instantly.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              FilledButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const MyPatientsPage()),
+                ),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                ),
+                icon: const Icon(Icons.key_outlined, size: 18),
+                label: const Text('Generate invite'),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: () => _loadActivePatients(),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                ),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Refresh'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildVoiceCheckinsCard(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final therapistId = _therapistId;
     if (therapistId == null) {
       return _buildSectionCard(
         context: context,
-        icon: Icons.mic_rounded,
+        icon: Icons.mic,
+        iconColor: Colors.red.shade400,
         title: 'Recent voice check-ins',
         subtitle: 'Link a patient to begin receiving voice reflections and actionable updates.',
-        child: const SizedBox.shrink(),
       );
     }
 
@@ -684,21 +476,24 @@ class _ListenPageState extends State<ListenPage> {
 
     return _buildSectionCard(
       context: context,
-      icon: Icons.mic_rounded,
+      icon: Icons.mic,
+      iconColor: Colors.red.shade400,
       title: 'Recent voice check-ins',
       subtitle: 'Review recorded reflections and open them in a new tab to listen or download.',
-      headerAction: FilledButton.tonalIcon(
+      headerAction: FilledButton.icon(
         onPressed: _activePatients.isEmpty ? null : _startTherapistRecordingFlow,
-        icon: const Icon(Icons.add_circle_outline),
+        style: FilledButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        ),
+        icon: const Icon(Icons.add_circle_outline, size: 18),
         label: const Text('Record'),
       ),
-      accentColor: scheme.error,
       child: StreamBuilder<List<VoiceCheckin>>(
         stream: _voiceService.streamTherapistCheckins(therapistId: therapistId, limit: 20),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Column(
-              children: const [
+            return const Column(
+              children: [
                 ShimmerListTile(),
                 SizedBox(height: 12),
                 ShimmerListTile(),
@@ -706,37 +501,19 @@ class _ListenPageState extends State<ListenPage> {
             );
           }
           if (snapshot.hasError) {
-            return Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: scheme.errorContainer,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: scheme.error.withOpacity(0.25)),
-              ),
-              child: Text(
-                'Failed to load voice check-ins. Please try again in a moment.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: scheme.onErrorContainer,
-                    ),
+            return Text(
+              'Failed to load voice check-ins. Please try again in a moment.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.error,
               ),
             );
           }
           final items = snapshot.data ?? [];
           if (items.isEmpty) {
-            return Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: scheme.surface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: scheme.outline.withOpacity(0.12)),
-              ),
-              child: Text(
-                'No voice check-ins yet. Encourage patients to send quick reflections so you can respond asynchronously.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSurface.withOpacity(0.72),
-                    ),
+            return Text(
+              'No voice check-ins yet. Encourage patients to send quick reflections so you can respond asynchronously.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurface.withOpacity(0.7),
               ),
             );
           }
@@ -760,99 +537,6 @@ class _ListenPageState extends State<ListenPage> {
               },
             ));
             if (i != items.length - 1) {
-              children.add(const SizedBox(height: 12));
-            }
-          }
-          return Column(children: children);
-        },
-      ),
-    );
-  }
-
-  Widget _buildTranscriptsCard(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final therapistId = _therapistId;
-    if (therapistId == null) {
-      return _buildSectionCard(
-        context: context,
-        icon: Icons.article_outlined,
-        title: 'Transcripts',
-        subtitle: 'Once your patients begin sharing voice reflections, AI transcripts will appear here for quick review.',
-        child: const SizedBox.shrink(),
-      );
-    }
-
-    final patientLookup = {for (final p in _activePatients) p.id: p};
-
-    return _buildSectionCard(
-      context: context,
-      icon: Icons.article_outlined,
-      title: 'Transcripts',
-      subtitle: 'Review AI-assisted conversation summaries to capture insights and action items.',
-      child: StreamBuilder<List<AiConversationSummary>>(
-        stream: _aiService.streamTherapistSummaries(therapistId: therapistId, limit: 20),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Column(
-              children: const [
-                ShimmerListTile(),
-                SizedBox(height: 12),
-                ShimmerListTile(),
-              ],
-            );
-          }
-          if (snapshot.hasError) {
-            return Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: scheme.errorContainer,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: scheme.error.withOpacity(0.25)),
-              ),
-              child: Text(
-                'Failed to load transcripts. Please refresh to try again.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: scheme.onErrorContainer,
-                    ),
-              ),
-            );
-          }
-          final summaries = snapshot.data ?? [];
-          if (summaries.isEmpty) {
-            return Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: scheme.surface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: scheme.outline.withOpacity(0.12)),
-              ),
-              child: Text(
-                'No transcripts yet. Once your patients share updates, AI summaries will appear here for quick review.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSurface.withOpacity(0.72),
-                    ),
-              ),
-            );
-          }
-
-          final children = <Widget>[];
-          for (var i = 0; i < summaries.length; i++) {
-            final s = summaries[i];
-            final patient = patientLookup[s.patientId];
-            final name = patient == null
-                ? 'Unknown patient'
-                : (patient.fullName.isNotEmpty ? patient.fullName : patient.email);
-            children.add(_AiSummaryTile(
-              name: name,
-              dateLabel: _formatMonthDay(s.createdAt),
-              snippet: _truncate(s.summary, max: 70),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => AiSummaryDetailPage(summary: s)),
-              ),
-            ));
-            if (i != summaries.length - 1) {
               children.add(const SizedBox(height: 12));
             }
           }
@@ -909,16 +593,16 @@ class _ListenPageState extends State<ListenPage> {
                         ],
                       ),
                       const SizedBox(height: 20),
-                      _buildHeroCard(context),
-                      const SizedBox(height: 24),
                       if (_error != null)
                         _buildErrorCard(context)
                       else ...[
                         _buildActivePatientsCard(context),
-                        const SizedBox(height: 24),
+                        if (_activePatients.isEmpty && !_loading) ...[
+                          const SizedBox(height: 20),
+                          _buildInvitationCard(context),
+                        ],
+                        const SizedBox(height: 20),
                         _buildVoiceCheckinsCard(context),
-                        const SizedBox(height: 24),
-                        _buildTranscriptsCard(context),
                       ],
                       const SizedBox(height: 36),
                     ],
@@ -943,80 +627,50 @@ class _ListenPatientTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final radius = BorderRadius.circular(20);
-    return Material(
-      color: Colors.transparent,
-      borderRadius: radius,
-      child: InkWell(
-        borderRadius: radius,
-        onTap: onTap,
-        splashColor: scheme.primary.withOpacity(0.08),
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Color.lerp(scheme.surface, scheme.primaryContainer, 0.32) ?? scheme.surface,
-                Color.lerp(scheme.surfaceVariant, scheme.primaryContainer.withOpacity(0.4), 0.4) ?? scheme.surfaceVariant,
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.black.withOpacity(0.05)),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              height: 48,
+              width: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.grey.shade200,
+              ),
+              child: Icon(Icons.person_outline, color: Colors.grey.shade700),
             ),
-            borderRadius: radius,
-            border: Border.all(color: scheme.outline.withOpacity(0.08)),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 12), spreadRadius: -6),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            child: Row(
-              children: [
-                Container(
-                  height: 50,
-                  width: 50,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: scheme.primary.withOpacity(0.14),
-                    border: Border.all(color: scheme.primary.withOpacity(0.22)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                   ),
-                  child: Icon(Icons.person_outline, color: scheme.primary),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        lastMessage,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurface.withOpacity(0.7),
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 4),
+                  Text(
+                    lastMessage,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurface.withOpacity(0.6),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  height: 38,
-                  width: 38,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.28),
-                    border: Border.all(color: Colors.white.withOpacity(0.32)),
-                  ),
-                  child: Icon(Icons.arrow_forward_ios_rounded, size: 18, color: scheme.primary.withOpacity(0.9)),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+            Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey.shade400),
+          ],
         ),
       ),
     );
@@ -1039,93 +693,51 @@ class _VoiceCheckinTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final borderRadius = BorderRadius.circular(16);
-    final borderColor = colorScheme.outline.withOpacity(0.2);
-    return Material(
-      color: Colors.transparent,
-      borderRadius: borderRadius,
-      child: InkWell(
-        borderRadius: borderRadius,
-        onTap: onOpen,
-        child: Ink(
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: borderRadius,
-            border: Border.all(color: borderColor),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 3))],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                const CircleAvatar(radius: 24, backgroundColor: Color(0xFFE9EAED), child: Icon(Icons.mic, color: Colors.grey)),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(name, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 4),
-                    Text('$dateLabel • ${_formatDuration(duration)}',
-                        style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurface.withOpacity(0.6))),
-                  ]),
-                ),
-                const SizedBox(width: 12),
-                IconButton(onPressed: onOpen, icon: const Icon(Icons.open_in_new), color: theme.colorScheme.primary, tooltip: 'Open audio'),
-              ],
-            ),
-          ),
+    final scheme = theme.colorScheme;
+    return InkWell(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.black.withOpacity(0.05)),
         ),
-      ),
-    );
-  }
-}
-
-class _AiSummaryTile extends StatelessWidget {
-  final String name;
-  final String dateLabel;
-  final String snippet;
-  final VoidCallback? onTap;
-  const _AiSummaryTile({required this.name, required this.dateLabel, required this.snippet, this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final borderRadius = BorderRadius.circular(16);
-    final borderColor = colorScheme.outline.withOpacity(0.2);
-    return Material(
-      color: Colors.transparent,
-      borderRadius: borderRadius,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: borderRadius,
-        child: Ink(
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: borderRadius,
-            border: Border.all(color: borderColor),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 3))],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(children: [
-              CircleAvatar(radius: 24, backgroundColor: colorScheme.surfaceVariant, child: Icon(Icons.notes_rounded, color: colorScheme.onSurfaceVariant)),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(name, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 2),
-                  Text(dateLabel, style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurface.withOpacity(0.6))),
-                  const SizedBox(height: 6),
-                  Text(snippet, maxLines: 2, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall),
-                ]),
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              height: 48,
+              width: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.grey.shade200,
               ),
-              const SizedBox(width: 12),
-              Icon(Icons.arrow_forward_ios_rounded, size: 18, color: colorScheme.onSurface.withOpacity(0.6)),
-            ]),
-          ),
+              child: Icon(Icons.mic, color: Colors.grey.shade700, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text('$dateLabel • ${_formatDuration(duration)}',
+                      style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurface.withOpacity(0.6))),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: onOpen,
+              icon: const Icon(Icons.open_in_new, size: 20),
+              color: scheme.primary,
+              tooltip: 'Open audio',
+            ),
+          ],
         ),
       ),
     );
   }
 }
+
+

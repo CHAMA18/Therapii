@@ -100,6 +100,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     if (!mounted) return;
 
     if (therapistId == null || therapistId.isEmpty) {
+      debugPrint('[PatientDashboard] No therapistId provided');
       setState(() {
         _therapistUser = null;
         _therapistAiName = null;
@@ -107,10 +108,13 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
       return;
     }
 
+    debugPrint('[PatientDashboard] Loading therapist: $therapistId');
+
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(therapistId).get();
       if (!mounted) return;
       if (!doc.exists) {
+        debugPrint('[PatientDashboard] Therapist user doc not found');
         setState(() {
           _therapistUser = null;
           _therapistAiName = null;
@@ -123,25 +127,31 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
       String? aiName;
       try {
         final therapistDoc = await FirebaseFirestore.instance.collection('therapists').doc(therapistId).get();
+        debugPrint('[PatientDashboard] Therapist doc exists: ${therapistDoc.exists}');
         if (therapistDoc.exists) {
           final therapistData = therapistDoc.data();
+          debugPrint('[PatientDashboard] Therapist data keys: ${therapistData?.keys.toList()}');
           final aiProfile = therapistData?['ai_training_profile'];
+          debugPrint('[PatientDashboard] AI profile: $aiProfile');
           if (aiProfile is Map<String, dynamic>) {
             final name = aiProfile['name'];
+            debugPrint('[PatientDashboard] AI name from profile: $name');
             if (name is String && name.isNotEmpty) {
               aiName = name;
             }
           }
         }
       } catch (e) {
-        debugPrint('Failed to load AI name: $e');
+        debugPrint('[PatientDashboard] Failed to load AI name: $e');
       }
       
+      debugPrint('[PatientDashboard] Final AI name: $aiName');
       setState(() {
         _therapistUser = therapist;
         _therapistAiName = aiName;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[PatientDashboard] Error loading therapist: $e');
       if (!mounted) return;
       setState(() {
         _therapistUser = null;
