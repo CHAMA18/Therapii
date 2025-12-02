@@ -25,6 +25,7 @@ import 'package:therapii/models/voice_checkin.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:therapii/widgets/therapist_approval_gate.dart';
 import 'package:therapii/widgets/dashboard_action_card.dart';
+import 'package:therapii/widgets/primary_button.dart';
 
 enum TopNavSection { patients, listen }
 
@@ -634,112 +635,31 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
 
                       const SizedBox(height: 28),
 
-                      // Active patients header
-                      Row(
-                        children: [
-                          Text('Active patients', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const NewPatientInfoPage()),
-                            ),
-                            style: TextButton.styleFrom(
-                              foregroundColor: theme.colorScheme.primary,
-                              padding: EdgeInsets.zero,
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: const Text('Invite New'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-
-                      if (_loading) ...[
-                        const SizedBox(height: 8),
-                        Column(children: [
-                          for (int i = 0; i < 3; i++) ...[
-                            const ShimmerListTile(),
-                            const SizedBox(height: 12),
-                          ],
-                          const SizedBox(height: 20),
-                          Row(children: [
-                            Text('Invitations sent', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                            const Spacer(),
-                          ]),
-                          const SizedBox(height: 8),
-                          for (int i = 0; i < 2; i++) ...[
-                            const ShimmerInviteTile(),
-                            const SizedBox(height: 12),
-                          ],
-                        ]),
-                      ] else if (_error != null) ...[
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.errorContainer,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(_error!, style: TextStyle(color: theme.colorScheme.onErrorContainer)),
+                      // Active Patients Card - Premium styling like Billing page
+                      _ActivePatientsCard(
+                        isLoading: _loading,
+                        error: _error,
+                        patients: patientsToDisplay,
+                        hasMorePatients: hasMorePatients,
+                        showAllPatients: _showAllPatients,
+                        onShowAll: () => setState(() => _showAllPatients = true),
+                        onManage: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const NewPatientInfoPage()),
                         ),
-                      ] else ...[
-                        const SizedBox(height: 8),
-                        if (_activePatients.isEmpty)
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.surface,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
-                            ),
-                            child: Text(
-                              'No active patients yet.',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: theme.colorScheme.onSurface.withOpacity(0.7)),
-                            ),
-                          )
-                        else
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              for (final u in patientsToDisplay) ...[
-                                _buildPatientTile(u),
-                                const SizedBox(height: 12),
-                              ],
-                              if (hasMorePatients && !_showAllPatients)
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: TextButton(
-                                    onPressed: () => setState(() => _showAllPatients = true),
-                                    style: TextButton.styleFrom(
-                                      padding: EdgeInsets.zero,
-                                      minimumSize: Size.zero,
-                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      textStyle:
-                                          theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                                    ),
-                                    child: const Text('See All'),
-                                  ),
-                                ),
-                            ],
+                        buildPatientTile: _buildPatientTile,
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Pending Invites Card - Premium styling
+                      if (!_loading && _pendingInvites.isNotEmpty)
+                        _PendingInvitesCard(
+                          invites: _pendingInvites,
+                          onDelete: _confirmAndDelete,
+                          onGenerateInvite: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const NewPatientInfoPage()),
                           ),
-                        const SizedBox(height: 24),
-                        if (_pendingInvites.isNotEmpty) ...[
-                          Row(children: [
-                            Text('Invitations sent',
-                                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                            const Spacer(),
-                          ]),
-                          const SizedBox(height: 8),
-                          Column(children: [
-                            for (final inv in _pendingInvites) ...[
-                              _InviteTile(invitation: inv, onDelete: () => _confirmAndDelete(inv)),
-                              const SizedBox(height: 12),
-                            ],
-                          ]),
-                        ],
-                      ],
+                        ),
                       const SizedBox(height: 40),
                     ],
                   ),
@@ -1317,3 +1237,393 @@ class _CornerBadge extends StatelessWidget {
 }
 
 // Drawer and static content were extracted to CommonSettingsDrawer for reuse.
+
+/// Premium Active Patients Card - styled like screenshot design
+class _ActivePatientsCard extends StatelessWidget {
+  final bool isLoading;
+  final String? error;
+  final List<AppUser.User> patients;
+  final bool hasMorePatients;
+  final bool showAllPatients;
+  final VoidCallback onShowAll;
+  final VoidCallback onManage;
+  final Widget Function(AppUser.User) buildPatientTile;
+
+  const _ActivePatientsCard({
+    required this.isLoading,
+    this.error,
+    required this.patients,
+    required this.hasMorePatients,
+    required this.showAllPatients,
+    required this.onShowAll,
+    required this.onManage,
+    required this.buildPatientTile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: scheme.surface,
+        border: Border.all(color: scheme.outline.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row with icon, title/subtitle, and Manage button
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Blue circle icon
+              Container(
+                height: 52,
+                width: 52,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: scheme.primaryContainer.withValues(alpha: 0.6),
+                ),
+                child: Center(
+                  child: Icon(
+                    Icons.circle,
+                    color: scheme.primary,
+                    size: 16,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Title and subtitle
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Active\npatients',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      patients.isEmpty
+                          ? 'No active patients yet. Share an invitation code to begin collaborating.'
+                          : '${patients.length} patient${patients.length == 1 ? '' : 's'} connected',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurface.withValues(alpha: 0.55),
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Manage button
+              OutlinedButton.icon(
+                onPressed: onManage,
+                icon: const Icon(Icons.people_outline_rounded, size: 18),
+                label: const Text('Manage'),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: scheme.outline.withValues(alpha: 0.2)),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (isLoading) ...[
+            const SizedBox(height: 22),
+            const ShimmerListTile(),
+            const SizedBox(height: 12),
+            const ShimmerListTile(),
+          ] else if (error != null) ...[
+            const SizedBox(height: 22),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: scheme.errorContainer.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: scheme.error.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline_rounded, color: scheme.error),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      error!,
+                      style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onErrorContainer),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (patients.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            for (final patient in patients) ...[
+              buildPatientTile(patient),
+              const SizedBox(height: 12),
+            ],
+            if (hasMorePatients && !showAllPatients)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Center(
+                  child: TextButton.icon(
+                    onPressed: onShowAll,
+                    icon: const Icon(Icons.expand_more_rounded),
+                    label: const Text('Show all patients'),
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Premium Pending Invites Card - styled like Billing page containers
+class _PendingInvitesCard extends StatelessWidget {
+  final List<InvitationCode> invites;
+  final Future<void> Function(InvitationCode) onDelete;
+  final VoidCallback onGenerateInvite;
+
+  const _PendingInvitesCard({
+    required this.invites,
+    required this.onDelete,
+    required this.onGenerateInvite,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        color: scheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: scheme.primary.withValues(alpha: 0.05),
+            blurRadius: 32,
+            offset: const Offset(0, 20),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(26),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                height: 54,
+                width: 54,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: scheme.tertiary.withValues(alpha: 0.18),
+                ),
+                child: Icon(Icons.mail_outline_rounded, color: scheme.tertiary),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Pending invitations',
+                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${invites.length} invitation${invites.length == 1 ? '' : 's'} waiting for response',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurface.withValues(alpha: 0.65),
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          for (var i = 0; i < invites.length; i++) ...[
+            _PremiumInviteTile(invitation: invites[i], onDelete: () => onDelete(invites[i])),
+            if (i < invites.length - 1) const SizedBox(height: 12),
+          ],
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onGenerateInvite,
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('New invitation'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Premium Invite Tile - refined styling
+class _PremiumInviteTile extends StatelessWidget {
+  final InvitationCode invitation;
+  final VoidCallback? onDelete;
+  const _PremiumInviteTile({required this.invitation, this.onDelete});
+
+  String _remainingText(DateTime now, DateTime expiry) {
+    final diff = expiry.difference(now);
+    if (diff.isNegative) return 'Expired';
+    final hours = diff.inHours;
+    final minutes = diff.inMinutes % 60;
+    if (hours >= 1) return '${hours}h ${minutes}m remaining';
+    return '${minutes}m remaining';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final now = DateTime.now();
+    final showCode = now.isBefore(invitation.expiresAt);
+    final isUrgent = invitation.expiresAt.difference(now).inHours < 6;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        border: Border.all(
+          color: isUrgent && showCode
+              ? Colors.amber.withValues(alpha: 0.5)
+              : scheme.outline.withValues(alpha: 0.12),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: scheme.primaryContainer.withValues(alpha: 0.5),
+            child: Text(
+              invitation.patientFirstName.isNotEmpty
+                  ? invitation.patientFirstName[0].toUpperCase()
+                  : '?',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: scheme.onPrimaryContainer,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  invitation.patientFirstName.isNotEmpty
+                      ? invitation.patientFirstName
+                      : invitation.patientEmail,
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  invitation.patientEmail,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (showCode)
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: scheme.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: scheme.primary.withValues(alpha: 0.22)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.vpn_key_rounded, size: 14, color: scheme.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              invitation.code,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: scheme.primary,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isUrgent
+                              ? Colors.amber.withValues(alpha: 0.15)
+                              : scheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          _remainingText(now, invitation.expiresAt),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: isUrgent ? Colors.amber.shade800 : scheme.onSurface.withValues(alpha: 0.6),
+                            fontWeight: isUrgent ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: scheme.error.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      'Invitation expired',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: scheme.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: onDelete,
+            icon: const Icon(Icons.delete_outline_rounded),
+            color: scheme.error.withValues(alpha: 0.7),
+            tooltip: 'Delete invitation',
+          ),
+        ],
+      ),
+    );
+  }
+}
