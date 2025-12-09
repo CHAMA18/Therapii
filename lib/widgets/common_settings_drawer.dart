@@ -1,16 +1,54 @@
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:therapii/auth/firebase_auth_manager.dart';
 import 'package:therapii/pages/admin_dashboard_page.dart';
 import 'package:therapii/pages/admin_settings_page.dart';
 import 'package:therapii/pages/auth_welcome_page.dart';
+import 'package:therapii/pages/billing_page.dart';
 import 'package:therapii/pages/edit_profile_page.dart';
 import 'package:therapii/theme_mode_controller.dart';
 import 'package:therapii/utils/admin_access.dart';
 import 'package:therapii/widgets/app_drawer.dart';
 
 /// Common settings drawer used across therapist/patient pages.
-class CommonSettingsDrawer extends StatelessWidget {
+class CommonSettingsDrawer extends StatefulWidget {
   const CommonSettingsDrawer({super.key});
+
+  @override
+  State<CommonSettingsDrawer> createState() => _CommonSettingsDrawerState();
+}
+
+class _CommonSettingsDrawerState extends State<CommonSettingsDrawer> {
+  bool _isLoadingSubscription = true;
+  bool _isPaidUser = false;
+  String _planName = 'Free Plan';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSubscriptionStatus();
+  }
+
+  Future<void> _fetchSubscriptionStatus() async {
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable('getStripeBillingDetails');
+      final result = await callable.call();
+      final data = result.data as Map<String, dynamic>;
+      if (mounted) {
+        setState(() {
+          _isPaidUser = data['isPaidUser'] == true;
+          _planName = data['planName'] as String? ?? 'Free Plan';
+          _isLoadingSubscription = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching subscription status: $e');
+      if (mounted) {
+        setState(() => _isLoadingSubscription = false);
+      }
+    }
+  }
 
   bool _isDarkMode(BuildContext context) {
     final mode = themeModeController.mode;
@@ -29,6 +67,7 @@ class CommonSettingsDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final isAdmin = _isAdmin();
     
     return AnimatedBuilder(
@@ -39,6 +78,59 @@ class CommonSettingsDrawer extends StatelessWidget {
           title: 'Settings',
           subtitle: 'Access helpful info and personalize your view.',
           children: [
+            // Subscription Status Section - matches ListTile styling
+            ListTile(
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: _isPaidUser
+                      ? scheme.primary.withValues(alpha: 0.12)
+                      : scheme.tertiary.withValues(alpha: 0.12),
+                ),
+                child: _isLoadingSubscription
+                    ? Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: scheme.primary,
+                        ),
+                      )
+                    : Icon(
+                        _isPaidUser
+                            ? Icons.workspace_premium_rounded
+                            : Icons.star_outline_rounded,
+                        size: 22,
+                        color: _isPaidUser ? scheme.primary : scheme.tertiary,
+                      ),
+              ),
+              title: Text(
+                _isLoadingSubscription ? 'Loading...' : _planName,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurface,
+                ),
+              ),
+              subtitle: Text(
+                _isLoadingSubscription
+                    ? 'Checking subscription'
+                    : (_isPaidUser ? 'Premium member' : 'Tap to upgrade'),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurface.withValues(alpha: 0.6),
+                ),
+              ),
+              trailing: Icon(
+                Icons.chevron_right_rounded,
+                color: scheme.onSurface.withValues(alpha: 0.4),
+              ),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const BillingPage()),
+                );
+              },
+            ),
             if (isAdmin) ...[
               ListTile(
                 leading: Icon(Icons.space_dashboard_outlined, color: theme.colorScheme.primary),

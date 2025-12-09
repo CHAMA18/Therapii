@@ -7,7 +7,7 @@ admin.initializeApp();
 
 // Resend API configuration
 const RESEND_API_KEY = process.env.RESEND_API_KEY || 're_EkWubvjF_N4qqb9JD1BHkTuNZ2acKEwD9';
-const RESEND_FROM_EMAIL = 'updates@trytherapii.com';
+const RESEND_FROM_EMAIL = 'updates@updates.trytherapii.com';
 
 /**
  * Get Stripe instance with secret key from environment
@@ -267,14 +267,41 @@ The Therapii Team`;
       });
 
       if (error) {
-        console.error('Resend API error:', error);
+        console.error('Resend API error:', JSON.stringify(error, null, 2));
+        // Log the specific error to Firestore for debugging
+        try {
+          await admin.firestore().collection('email_errors').add({
+            type: 'resend_api_error',
+            patientEmail,
+            therapistId,
+            error: JSON.stringify(error),
+            errorName: error?.name || null,
+            errorMessage: error?.message || null,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } catch (logErr) {
+          console.error('Failed to log email error:', logErr);
+        }
         // Log error but don't fail - invitation is already created
       } else {
         emailSent = true;
         console.log(`Email sent successfully via Resend for ${patientEmail}`, data);
       }
     } catch (emailError) {
-      console.error('Failed to send email via Resend:', emailError);
+      console.error('Failed to send email via Resend:', emailError?.message || emailError);
+      // Log the catch error to Firestore for debugging
+      try {
+        await admin.firestore().collection('email_errors').add({
+          type: 'resend_catch_error',
+          patientEmail,
+          therapistId,
+          error: emailError?.message || String(emailError),
+          stack: emailError?.stack || null,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (logErr) {
+        console.error('Failed to log email catch error:', logErr);
+      }
       // Don't fail the entire function if email fails - invitation is already created
       // The user can still manually share the code
     }

@@ -13,7 +13,16 @@ import 'package:therapii/models/ai_conversation_summary.dart';
 import 'package:therapii/services/user_service.dart';
 
 class AiTherapistChatPage extends StatefulWidget {
-  const AiTherapistChatPage({super.key});
+  /// The therapist ID whose AI model the patient will chat with.
+  final String therapistId;
+  /// The AI model name set by the therapist.
+  final String aiName;
+
+  const AiTherapistChatPage({
+    super.key,
+    required this.therapistId,
+    required this.aiName,
+  });
 
   @override
   State<AiTherapistChatPage> createState() => _AiTherapistChatPageState();
@@ -29,7 +38,7 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
   bool _speechAvailable = false;
   bool _isListening = false;
   
-  String _aiName = 'KAI'; // Default, will be updated from therapist's training profile
+  late String _aiName;
   List<AiChatMessage> _conversation = <AiChatMessage>[];
 
   bool _sending = false;
@@ -43,6 +52,7 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
   @override
   void initState() {
     super.initState();
+    _aiName = widget.aiName;
     _initSpeech();
     _loadPatientContext();
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
@@ -265,32 +275,10 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
       final profile = await _userService.getUser(firebaseUser.uid);
       if (!mounted) return;
       
-      // Load therapist's AI name
-      String aiName = 'KAI';
-      final therapistId = profile?.therapistId;
-      if (therapistId != null && therapistId.isNotEmpty) {
-        try {
-          final therapistDoc = await FirebaseFirestore.instance.collection('therapists').doc(therapistId).get();
-          if (therapistDoc.exists) {
-            final therapistData = therapistDoc.data();
-            final aiProfile = therapistData?['ai_training_profile'];
-            if (aiProfile is Map<String, dynamic>) {
-              final name = aiProfile['name'];
-              if (name is String && name.isNotEmpty) {
-                aiName = name;
-              }
-            }
-          }
-        } catch (e) {
-          debugPrint('Failed to load AI name: $e');
-        }
-      }
-      
       final context = profile?.patientOnboardingData;
       final summary = _buildPersonalizationSummary(context);
       setState(() {
-        _aiName = aiName;
-        _patientProfile = profile;
+        _patientProfile = profile?.copyWith(therapistId: widget.therapistId);
         _patientContext = context != null && context.isNotEmpty ? context : null;
         _personalizationSummary = summary;
         _loadingContext = false;
@@ -728,8 +716,8 @@ extension _SummaryActions on _AiTherapistChatPageState {
       return;
     }
 
-    final therapistId = _patientProfile?.therapistId;
-    if (therapistId == null || therapistId.isEmpty) {
+    final therapistId = widget.therapistId;
+    if (therapistId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No therapist is linked to your account yet.')),
       );

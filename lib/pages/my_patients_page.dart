@@ -22,7 +22,7 @@ import 'package:therapii/models/ai_conversation_summary.dart';
 import 'package:therapii/pages/ai_summary_detail_page.dart';
 import 'package:therapii/services/voice_checkin_service.dart';
 import 'package:therapii/models/voice_checkin.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:therapii/pages/voice_checkin_detail_page.dart';
 import 'package:therapii/widgets/therapist_approval_gate.dart';
 import 'package:therapii/widgets/dashboard_action_card.dart';
 import 'package:therapii/widgets/primary_button.dart';
@@ -328,11 +328,15 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
             name: name,
             dateLabel: _formatMonthDay(c.createdAt),
             duration: Duration(seconds: c.durationSeconds),
-            onOpen: () async {
-              final uri = Uri.tryParse(c.audioUrl);
-              if (uri != null) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              }
+            onOpen: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => VoiceCheckinDetailPage(
+                    checkin: c,
+                    patient: patient,
+                  ),
+                ),
+              );
             },
           ));
           if (i != items.length - 1) tiles.add(const SizedBox(height: 12));
@@ -523,12 +527,12 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
             builder: (ctx) => IconButton(
               icon: const Icon(Icons.menu),
               tooltip: 'Menu',
-              onPressed: () => Scaffold.of(ctx).openDrawer(),
+              onPressed: () => Scaffold.of(ctx).openEndDrawer(),
             ),
           ),
         ],
       ),
-      drawer: const CommonSettingsDrawer(),
+      endDrawer: const CommonSettingsDrawer(),
       body: SafeArea(
         child: Builder(builder: (innerContext) {
           if (!_loading) {
@@ -834,40 +838,34 @@ class _PatientTile extends StatelessWidget {
                               fontWeight: FontWeight.w700,
                               color: colorScheme.onSurface,
                             ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
-                      Text(lastMessage, style: subtitleStyle),
+                      Text(
+                        lastMessage,
+                        style: subtitleStyle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (unreadCount > 0) ...[
+                      const SizedBox(width: 6),
+                      _UnreadBadge(count: unreadCount),
+                    ],
                     IconButton(
                       onPressed: onOpenChat,
                       icon: const Icon(Icons.chat_bubble_outline, size: 20),
                       color: blueColor,
                       padding: const EdgeInsets.all(8),
                       constraints: const BoxConstraints(minHeight: 36, minWidth: 36),
-                    ),
-                    if (unreadCount > 0) ...[
-                      const SizedBox(width: 6),
-                      _UnreadBadge(count: unreadCount),
-                    ],
-                    const SizedBox(width: 10),
-                    TextButton(
-                      onPressed: onOpenChat,
-                      style: TextButton.styleFrom(
-                        foregroundColor: blueColor,
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                      child: const Text('Message History'),
+                      tooltip: 'Message History',
                     ),
                   ],
                 ),
@@ -1027,16 +1025,20 @@ class _VoiceCheckinTile extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                         color: colorScheme.onSurface,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '$dateLabel • ${_formatDuration(duration)}',
                       style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurface.withOpacity(0.6)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               IconButton(
                 onPressed: onOpen,
                 icon: const Icon(Icons.open_in_new),
@@ -1296,9 +1298,9 @@ class _ActivePatientsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row with icon, title/subtitle, and Manage button
+          // Header row with icon, title, and Manage button
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Blue circle icon
               Container(
@@ -1317,45 +1319,30 @@ class _ActivePatientsCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              // Title and subtitle
+              // Title
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Active\npatients',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        height: 1.15,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      patients.isEmpty
-                          ? 'No active patients yet. Share an invitation code to begin collaborating.'
-                          : '${patients.length} patient${patients.length == 1 ? '' : 's'} connected',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurface.withValues(alpha: 0.55),
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Manage button
-              OutlinedButton.icon(
-                onPressed: onManage,
-                icon: const Icon(Icons.people_outline_rounded, size: 18),
-                label: const Text('Manage'),
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: scheme.outline.withValues(alpha: 0.2)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
+                child: Text(
+                  'Active patients',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    height: 1.15,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
+          ),
+          // Subtitle - full width below header
+          const SizedBox(height: 12),
+          Text(
+            patients.isEmpty
+                ? 'No active patients yet. Share an invitation code to begin collaborating.'
+                : '${patients.length} patient${patients.length == 1 ? '' : 's'} connected',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurface.withValues(alpha: 0.55),
+              height: 1.4,
+            ),
           ),
           if (isLoading) ...[
             const SizedBox(height: 22),
@@ -1568,7 +1555,9 @@ class _PremiumInviteTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 if (showCode)
-                  Row(
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -1593,7 +1582,6 @@ class _PremiumInviteTile extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 10),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(

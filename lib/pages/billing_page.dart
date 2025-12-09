@@ -354,13 +354,11 @@ class _BillingPageState extends State<BillingPage> {
                         appliedCoupon: _appliedCoupon,
                         onRedeem: () => _showRedeemCodeDialog(context),
                       ),
-                      if (_isLoadingInvoices) ...[
-                        const SizedBox(height: 28),
-                        const Center(child: CircularProgressIndicator()),
-                      ] else if (_invoices.isNotEmpty) ...[
-                        const SizedBox(height: 28),
-                        _InvoiceHistory(invoices: _invoices),
-                      ],
+                      const SizedBox(height: 28),
+                      _InvoiceHistory(
+                        invoices: _invoices,
+                        isLoading: _isLoadingInvoices,
+                      ),
                       const SizedBox(height: 40),
                     ]),
                   ),
@@ -933,7 +931,8 @@ class _CreditActionsCard extends StatelessWidget {
 
 class _InvoiceHistory extends StatelessWidget {
   final List<_Invoice> invoices;
-  const _InvoiceHistory({required this.invoices});
+  final bool isLoading;
+  const _InvoiceHistory({required this.invoices, this.isLoading = false});
 
   Color _statusColor(BuildContext context, _InvoiceStatus status) {
     final scheme = Theme.of(context).colorScheme;
@@ -970,18 +969,100 @@ class _InvoiceHistory extends StatelessWidget {
         color: scheme.surface,
         boxShadow: [BoxShadow(color: scheme.primary.withValues(alpha: 0.05), blurRadius: 32, offset: const Offset(0, 20))],
       ),
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Invoice history', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 6),
-          Text(
-            'Download detailed receipts or share them with your care team.',
-            style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface.withValues(alpha: 0.65)),
+          Row(
+            children: [
+              Container(
+                height: 54,
+                width: 54,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: scheme.primary.withValues(alpha: 0.12),
+                ),
+                child: Icon(Icons.receipt_long_rounded, color: scheme.primary),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Invoices', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Download detailed receipts or share them with your care team.',
+                      style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface.withValues(alpha: 0.65)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 20),
-          for (final invoice in invoices)
+          if (isLoading)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Column(
+                  children: [
+                    SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: scheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Loading invoices...',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (invoices.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                border: Border.all(color: scheme.outline.withValues(alpha: 0.1)),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.receipt_outlined,
+                    size: 48,
+                    color: scheme.onSurface.withValues(alpha: 0.3),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No invoices yet',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurface.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Your past payments and receipts will appear here',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            )
+          else
+            for (final invoice in invoices)
             Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: Material(

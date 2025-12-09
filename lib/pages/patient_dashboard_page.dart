@@ -319,8 +319,19 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
   }
 
   void _openAiTherapist() {
+    final therapist = _currentTherapistProfile;
+    if (therapist == null) {
+      _showTherapistRequiredSnack();
+      return;
+    }
+    final aiName = therapist.aiName ?? 'AI Companion';
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const AiTherapistChatPage()),
+      MaterialPageRoute(
+        builder: (_) => AiTherapistChatPage(
+          therapistId: therapist.user.id,
+          aiName: aiName,
+        ),
+      ),
     );
   }
 
@@ -382,8 +393,11 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
   }
 
   String _resolveAiHandle() {
-    // Return custom AI name if available, otherwise default to 'KAI'
-    return _therapistAiName ?? 'KAI';
+    // Return custom AI name if available, otherwise show a prompt to connect
+    if (_therapistAiName == null || _therapistAiName!.isEmpty) {
+      return 'AI Companion';
+    }
+    return _therapistAiName!;
   }
 
   Widget _buildErrorState(BuildContext context) {
@@ -535,6 +549,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                             setState(() => _selectedTherapistIndex = index);
                           },
                           onTap: _openAiTherapist,
+                          isDisabled: _therapistUser == null,
                         ),
                         const SizedBox(height: 20),
                         DashboardActionCard(
@@ -594,6 +609,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                                 setState(() => _selectedTherapistIndex = index);
                               },
                               onTap: _openAiTherapist,
+                              isDisabled: _therapistUser == null,
                             ),
                           ),
                           const SizedBox(width: 24),
@@ -746,6 +762,7 @@ class _ChatWithAiCard extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onTherapistChanged;
   final VoidCallback onTap;
+  final bool isDisabled;
 
   const _ChatWithAiCard({
     required this.aiHandle,
@@ -755,6 +772,7 @@ class _ChatWithAiCard extends StatelessWidget {
     required this.selectedIndex,
     required this.onTherapistChanged,
     required this.onTap,
+    this.isDisabled = false,
   });
 
   void _showTherapistSwitcher(BuildContext context) {
@@ -847,13 +865,14 @@ class _ChatWithAiCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final gradient = AppGradients.primaryFor(theme.brightness);
+    final gradient = isDisabled ? null : AppGradients.primaryFor(theme.brightness);
 
     // Build subtitle with therapist name
-    String subtitle = 'Your 24/7 AI companion';
-    if (therapistName != null && therapistName!.isNotEmpty) {
-      subtitle = 'Trained by $therapistName';
-    }
+    String subtitle = isDisabled
+        ? 'Connect with a therapist to unlock'
+        : (therapistName != null && therapistName!.isNotEmpty)
+            ? 'Trained by $therapistName'
+            : 'Your 24/7 AI companion';
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -861,13 +880,16 @@ class _ChatWithAiCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(32),
         gradient: gradient,
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.primary.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        color: isDisabled ? colorScheme.surfaceContainerHighest : null,
+        boxShadow: isDisabled
+            ? null
+            : [
+                BoxShadow(
+                  color: colorScheme.primary.withValues(alpha: 0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
       ),
       child: Material(
         color: Colors.transparent,
@@ -875,8 +897,8 @@ class _ChatWithAiCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          splashColor: Colors.white.withValues(alpha: 0.1),
-          highlightColor: Colors.white.withValues(alpha: 0.05),
+          splashColor: isDisabled ? null : Colors.white.withValues(alpha: 0.1),
+          highlightColor: isDisabled ? null : Colors.white.withValues(alpha: 0.05),
           child: Padding(
             padding: const EdgeInsets.all(28),
             child: Column(
@@ -889,18 +911,24 @@ class _ChatWithAiCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
+                        color: isDisabled
+                            ? colorScheme.onSurface.withValues(alpha: 0.08)
+                            : Colors.white.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         Icons.auto_awesome_rounded,
-                        color: colorScheme.onPrimary,
+                        color: isDisabled
+                            ? colorScheme.onSurface.withValues(alpha: 0.4)
+                            : colorScheme.onPrimary,
                         size: 32,
                       ),
                     ),
                     Icon(
                       Icons.arrow_forward_rounded,
-                      color: Colors.white.withValues(alpha: 0.5),
+                      color: isDisabled
+                          ? colorScheme.onSurface.withValues(alpha: 0.2)
+                          : Colors.white.withValues(alpha: 0.5),
                       size: 24,
                     ),
                   ],
@@ -913,7 +941,9 @@ class _ChatWithAiCard extends StatelessWidget {
                       'Chat with $aiHandle',
                       style: theme.textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: colorScheme.onPrimary,
+                        color: isDisabled
+                            ? colorScheme.onSurface.withValues(alpha: 0.5)
+                            : colorScheme.onPrimary,
                         height: 1.1,
                       ),
                     ),
@@ -921,13 +951,31 @@ class _ChatWithAiCard extends StatelessWidget {
                     Text(
                       subtitle,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onPrimary.withValues(alpha: 0.9),
+                        color: isDisabled
+                            ? colorScheme.onSurface.withValues(alpha: 0.4)
+                            : colorScheme.onPrimary.withValues(alpha: 0.9),
                         height: 1.4,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (hasMultipleTherapists) ...[
+                    if (isDisabled) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: colorScheme.onSurface.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        child: Text(
+                          'Connect',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: colorScheme.onSurface.withValues(alpha: 0.6),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ] else if (hasMultipleTherapists) ...[
                       const SizedBox(height: 16),
                       GestureDetector(
                         onTap: () => _showTherapistSwitcher(context),

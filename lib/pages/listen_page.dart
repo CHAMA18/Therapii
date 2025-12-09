@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:therapii/auth/firebase_auth_manager.dart';
 import 'package:therapii/models/chat_conversation.dart';
 import 'package:therapii/models/user.dart' as app_user;
@@ -13,6 +12,7 @@ import 'package:therapii/services/invitation_service.dart';
 import 'package:therapii/services/user_service.dart';
 import 'package:therapii/services/voice_checkin_service.dart';
 import 'package:therapii/widgets/shimmer_widgets.dart';
+import 'package:therapii/pages/voice_checkin_detail_page.dart';
 import 'package:therapii/widgets/common_settings_drawer.dart';
 
 class ListenPage extends StatefulWidget {
@@ -320,27 +320,12 @@ class _ListenPageState extends State<ListenPage> {
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 20,
-                      ),
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        subtitle,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
-                  ],
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 20,
+                  ),
                 ),
               ),
               if (headerAction != null) ...[
@@ -349,6 +334,16 @@ class _ListenPageState extends State<ListenPage> {
               ],
             ],
           ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              subtitle,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+                height: 1.5,
+              ),
+            ),
+          ],
           if (child != null) ...[
             const SizedBox(height: 20),
             child,
@@ -516,11 +511,15 @@ class _ListenPageState extends State<ListenPage> {
               name: name,
               dateLabel: _formatMonthDay(c.createdAt),
               duration: Duration(seconds: c.durationSeconds),
-              onOpen: () async {
-                final uri = Uri.tryParse(c.audioUrl);
-                if (uri != null) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
-                }
+              onOpen: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => VoiceCheckinDetailPage(
+                      checkin: c,
+                      patient: patient,
+                    ),
+                  ),
+                );
               },
             ));
             if (i != items.length - 1) {
@@ -726,13 +725,23 @@ class _VoiceCheckinTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                  Text(
+                    name,
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 4),
-                  Text('$dateLabel • ${_formatDuration(duration)}',
-                      style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurface.withOpacity(0.6))),
+                  Text(
+                    '$dateLabel • ${_formatDuration(duration)}',
+                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurface.withOpacity(0.6)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
+            const SizedBox(width: 8),
             IconButton(
               onPressed: onOpen,
               icon: const Icon(Icons.open_in_new, size: 20),
