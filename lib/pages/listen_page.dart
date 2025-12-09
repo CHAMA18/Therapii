@@ -430,28 +430,15 @@ class _ListenPageState extends State<ListenPage> {
             ),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              FilledButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const MyPatientsPage()),
-                ),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                ),
-                icon: const Icon(Icons.key_outlined, size: 18),
-                label: const Text('Generate invite'),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                onPressed: () => _loadActivePatients(),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                ),
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Refresh'),
-              ),
-            ],
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MyPatientsPage()),
+            ),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            icon: const Icon(Icons.key_outlined, size: 18),
+            label: const Text('Generate invite'),
           ),
         ],
       ),
@@ -552,6 +539,30 @@ class _ListenPageState extends State<ListenPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          'Your Therapii Space',
+          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        centerTitle: true,
+        actions: [
+          Builder(
+            builder: (ctx) => IconButton(
+              icon: const Icon(Icons.menu),
+              tooltip: 'Menu',
+              onPressed: () => Scaffold.of(ctx).openDrawer(),
+            ),
+          ),
+        ],
+      ),
       drawer: const CommonSettingsDrawer(),
       body: SafeArea(
         child: Builder(
@@ -568,19 +579,14 @@ class _ListenPageState extends State<ListenPage> {
                     children: [
                       Row(
                         children: [
-                          IconButton(
-                            onPressed: () => Scaffold.of(innerContext).openDrawer(),
-                            icon: const Icon(Icons.menu),
-                          ),
-                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Your Therapii Space',
-                              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                              'Overview',
+                              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
                             ),
                           ),
                           FilledButton.tonalIcon(
-                            onPressed: () => Navigator.of(context).pushReplacement(
+                            onPressed: () => Navigator.of(context).push(
                               MaterialPageRoute(builder: (_) => const MyPatientsPage()),
                             ),
                             style: FilledButton.styleFrom(

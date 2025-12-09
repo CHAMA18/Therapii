@@ -520,7 +520,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 }
 
-// Header with gradient background - centered layout
+// Premium header with world-class design
 class _Header extends StatelessWidget {
   final String emailMasked;
   final String? displayName;
@@ -543,7 +543,6 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final gradient = AppGradients.primaryFor(theme.brightness);
     final scheme = theme.colorScheme;
     final hasEmail = emailMasked.trim().isNotEmpty;
     final trimmedName = displayName?.trim();
@@ -556,71 +555,291 @@ class _Header extends StatelessWidget {
         : (hasUrl ? NetworkImage(avatarUrl!) : null);
     final showSpinner = isLoading && imageProvider == null && !hasBytes;
 
-    final baseAvatar = CircleAvatar(
-      radius: 44,
-      backgroundColor: scheme.onPrimary.withValues(alpha: 0.18),
-      backgroundImage: showSpinner ? null : imageProvider,
-      child: showSpinner
-          ? SizedBox(
-              width: 26,
-              height: 26,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                valueColor: AlwaysStoppedAnimation<Color>(scheme.onPrimary),
-              ),
-            )
-          : (imageProvider == null
-              ? Icon(Icons.person, color: scheme.onPrimary, size: 44)
-              : null),
-    );
-
-    Widget avatar = SizedBox(
-      width: 88,
-      height: 88,
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF0066FF),
+            Color(0xFF2E86FF),
+            Color(0xFF4DA3FF),
+          ],
+          stops: [0.0, 0.5, 1.0],
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(36),
+          bottomRight: Radius.circular(36),
+        ),
+      ),
       child: Stack(
-        clipBehavior: Clip.none,
         children: [
-          Positioned.fill(child: baseAvatar),
-          if (onPickAvatar != null)
-            Positioned(
-              bottom: 2,
-              right: 2,
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: scheme.onPrimary,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Icon(Icons.camera_alt, size: 18, color: scheme.primary),
+          // Frosted glass orbs for depth
+          Positioned(
+            top: -40,
+            right: -30,
+            child: Container(
+              width: 160,
+              height: 160,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.08),
               ),
             ),
-          if (isUploading)
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: scheme.onPrimary.withValues(alpha: 0.25),
-                  shape: BoxShape.circle,
+          ),
+          Positioned(
+            bottom: 20,
+            left: -50,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.06),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 60,
+            left: 30,
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.05),
+              ),
+            ),
+          ),
+          // Main content
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Avatar with glowing ring
+                  _AvatarWithGlow(
+                    imageProvider: imageProvider,
+                    showSpinner: showSpinner,
+                    isUploading: isUploading,
+                    onPickAvatar: onPickAvatar,
+                  ),
+                  const SizedBox(height: 20),
+                  // Name with premium styling
+                  Text(
+                    headerTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                      shadows: [
+                        Shadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Update your profile photo, email, and password',
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.85),
+                      height: 1.4,
+                    ),
+                  ),
+                  if (hasEmail) ...[
+                    const SizedBox(height: 16),
+                    // Frosted glass email badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.25),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.verified_user_rounded,
+                              size: 14,
+                              color: Colors.white.withValues(alpha: 0.95),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Signed in as $emailMasked',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AvatarWithGlow extends StatelessWidget {
+  final ImageProvider<Object>? imageProvider;
+  final bool showSpinner;
+  final bool isUploading;
+  final VoidCallback? onPickAvatar;
+
+  const _AvatarWithGlow({
+    this.imageProvider,
+    required this.showSpinner,
+    required this.isUploading,
+    this.onPickAvatar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    Widget avatar = Container(
+      width: 110,
+      height: 110,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: 0.35),
+            Colors.white.withValues(alpha: 0.15),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Colors.white.withValues(alpha: 0.3),
+            blurRadius: 20,
+            spreadRadius: -5,
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: scheme.primary.withValues(alpha: 0.3),
+              blurRadius: 12,
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            CircleAvatar(
+              radius: 51,
+              backgroundColor: scheme.primary.withValues(alpha: 0.1),
+              backgroundImage: showSpinner ? null : imageProvider,
+              child: showSpinner
+                  ? SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor: AlwaysStoppedAnimation<Color>(scheme.primary),
+                      ),
+                    )
+                  : (imageProvider == null
+                      ? Icon(Icons.person_rounded, color: scheme.primary, size: 48)
+                      : null),
+            ),
+            // Camera button
+            if (onPickAvatar != null)
+              Positioned(
+                bottom: 2,
+                right: 2,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [scheme.primary, const Color(0xFF2E86FF)],
+                    ),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: scheme.primary.withValues(alpha: 0.4),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                    border: Border.all(color: Colors.white, width: 2.5),
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
                 ),
-                child: Center(
-                  child: SizedBox(
-                    width: 30,
-                    height: 30,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      valueColor: AlwaysStoppedAnimation<Color>(scheme.primary),
+              ),
+            // Upload overlay
+            if (isUploading)
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor: AlwaysStoppedAnimation<Color>(scheme.primary),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
 
@@ -635,61 +854,7 @@ class _Header extends StatelessWidget {
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(gradient: gradient),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              avatar,
-              const SizedBox(height: 16),
-              Text(
-                headerTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  color: scheme.onPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Update your profile photo, email, and password',
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: scheme.onPrimary.withValues(alpha: 0.9),
-                ),
-              ),
-              if (hasEmail) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: scheme.onPrimary.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Text(
-                    'Signed in as $emailMasked',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: scheme.onPrimary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
+    return avatar;
   }
 }
 

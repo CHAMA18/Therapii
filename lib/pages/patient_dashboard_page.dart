@@ -32,6 +32,13 @@ class PatientDashboardPage extends StatefulWidget {
   State<PatientDashboardPage> createState() => _PatientDashboardPageState();
 }
 
+/// Holds therapist info including their user data and AI model name.
+class TherapistProfile {
+  final app_user.User user;
+  final String? aiName;
+  TherapistProfile({required this.user, this.aiName});
+}
+
 class _PatientDashboardPageState extends State<PatientDashboardPage> {
   final FirebaseAuthManager _authManager = FirebaseAuthManager();
   final UserService _userService = UserService();
@@ -39,8 +46,8 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
   final ChatService _chatService = ChatService();
 
   app_user.User? _patient;
-  app_user.User? _therapistUser;
-  String? _therapistAiName;
+  List<TherapistProfile> _therapistProfiles = [];
+  int _selectedTherapistIndex = 0;
   bool _loading = true;
   bool _processingCode = false;
   String? _error;
@@ -73,18 +80,20 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
         return;
       }
 
-      final therapistId = (widget.therapistId?.trim().isNotEmpty ?? false)
-          ? widget.therapistId!.trim()
-          : (patient.therapistId?.trim().isNotEmpty ?? false)
-              ? patient.therapistId!.trim()
-              : null;
-
       setState(() {
         _patient = patient;
       });
 
-      await _loadTherapist(therapistId);
+      await _loadAllTherapists(patient.id);
       if (!mounted) return;
+
+      // If a specific therapistId was provided, select that therapist
+      if (widget.therapistId?.trim().isNotEmpty ?? false) {
+        final idx = _therapistProfiles.indexWhere((p) => p.user.id == widget.therapistId!.trim());
+        if (idx >= 0) {
+          setState(() => _selectedTherapistIndex = idx);
+        }
+      }
 
       setState(() => _loading = false);
     } catch (error) {
@@ -96,69 +105,73 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     }
   }
 
-  Future<void> _loadTherapist(String? therapistId) async {
+  /// Loads all therapists connected to this patient via accepted invitations.
+  Future<void> _loadAllTherapists(String patientId) async {
     if (!mounted) return;
 
-    if (therapistId == null || therapistId.isEmpty) {
-      debugPrint('[PatientDashboard] No therapistId provided');
-      setState(() {
-        _therapistUser = null;
-        _therapistAiName = null;
-      });
-      return;
-    }
-
-    debugPrint('[PatientDashboard] Loading therapist: $therapistId');
+    debugPrint('[PatientDashboard] Loading all therapists for patient: $patientId');
 
     try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(therapistId).get();
-      if (!mounted) return;
-      if (!doc.exists) {
-        debugPrint('[PatientDashboard] Therapist user doc not found');
-        setState(() {
-          _therapistUser = null;
-          _therapistAiName = null;
-        });
-        return;
-      }
-      final therapist = app_user.User.fromJson(doc.data()!);
-      
-      // Load AI name from therapist's training profile
-      String? aiName;
-      try {
-        final therapistDoc = await FirebaseFirestore.instance.collection('therapists').doc(therapistId).get();
-        debugPrint('[PatientDashboard] Therapist doc exists: ${therapistDoc.exists}');
-        if (therapistDoc.exists) {
-          final therapistData = therapistDoc.data();
-          debugPrint('[PatientDashboard] Therapist data keys: ${therapistData?.keys.toList()}');
-          final aiProfile = therapistData?['ai_training_profile'];
-          debugPrint('[PatientDashboard] AI profile: $aiProfile');
-          if (aiProfile is Map<String, dynamic>) {
-            final name = aiProfile['name'];
-            debugPrint('[PatientDashboard] AI name from profile: $name');
-            if (name is String && name.isNotEmpty) {
-              aiName = name;
+      final invitations = await _invitationService.getAcceptedInvitationsForPatient(patientId);
+      debugPrint('[PatientDashboard] Found ${invitations.length} accepted invitations');
+
+      final profiles = <TherapistProfile>[];
+      for (final inv in invitations) {
+        final therapistId = inv.therapistId;
+        if (therapistId.isEmpty) continue;
+
+        try {
+          final userDoc = await FirebaseFirestore.instance.collection('users').doc(therapistId).get();
+          if (!userDoc.exists) continue;
+          final therapistUser = app_user.User.fromJson(userDoc.data()!);
+
+          // Load AI name from therapist's training profile
+          String? aiName;
+          try {
+            final therapistDoc = await FirebaseFirestore.instance.collection('therapists').doc(therapistId).get();
+            if (therapistDoc.exists) {
+              final aiProfile = therapistDoc.data()?['ai_training_profile'];
+              if (aiProfile is Map<String, dynamic>) {
+                final name = aiProfile['name'];
+                if (name is String && name.isNotEmpty) {
+                  aiName = name;
+                }
+              }
             }
+          } catch (e) {
+            debugPrint('[PatientDashboard] Failed to load AI name for $therapistId: $e');
           }
+
+          profiles.add(TherapistProfile(user: therapistUser, aiName: aiName));
+        } catch (e) {
+          debugPrint('[PatientDashboard] Error loading therapist $therapistId: $e');
         }
-      } catch (e) {
-        debugPrint('[PatientDashboard] Failed to load AI name: $e');
       }
-      
-      debugPrint('[PatientDashboard] Final AI name: $aiName');
-      setState(() {
-        _therapistUser = therapist;
-        _therapistAiName = aiName;
-      });
-    } catch (e) {
-      debugPrint('[PatientDashboard] Error loading therapist: $e');
+
       if (!mounted) return;
       setState(() {
-        _therapistUser = null;
-        _therapistAiName = null;
+        _therapistProfiles = profiles;
+        _selectedTherapistIndex = 0;
+      });
+      debugPrint('[PatientDashboard] Loaded ${profiles.length} therapist profiles');
+    } catch (e) {
+      debugPrint('[PatientDashboard] Error loading therapists: $e');
+      if (!mounted) return;
+      setState(() {
+        _therapistProfiles = [];
+        _selectedTherapistIndex = 0;
       });
     }
   }
+
+  TherapistProfile? get _currentTherapistProfile {
+    if (_therapistProfiles.isEmpty) return null;
+    if (_selectedTherapistIndex < 0 || _selectedTherapistIndex >= _therapistProfiles.length) return null;
+    return _therapistProfiles[_selectedTherapistIndex];
+  }
+
+  app_user.User? get _therapistUser => _currentTherapistProfile?.user;
+  String? get _therapistAiName => _currentTherapistProfile?.aiName;
 
   Future<void> _promptForInvitationCode() async {
     if (_processingCode) return;
@@ -264,13 +277,17 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
         patientId: patient.id,
       );
 
-      final therapistUser = await _userService.getUser(invitation.therapistId);
-
+      // Reload all therapists to include the new one
+      await _loadAllTherapists(patient.id);
       if (!mounted) return;
 
-      setState(() {
-        _therapistUser = therapistUser;
-      });
+      // Select the newly added therapist
+      final newIdx = _therapistProfiles.indexWhere((p) => p.user.id == invitation.therapistId);
+      if (newIdx >= 0) {
+        setState(() => _selectedTherapistIndex = newIdx);
+      }
+
+      final therapistUser = _therapistUser;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -412,6 +429,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     final displayName = _resolvePatientDisplayName();
     final aiHandle = _resolveAiHandle();
     final theme = Theme.of(context);
+    final hasMultipleTherapists = _therapistProfiles.length > 1;
     
     // Greeting logic
     final hour = DateTime.now().hour;
@@ -507,11 +525,15 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        DashboardActionCard(
-                          title: 'Chat with $aiHandle',
-                          subtitle: 'Your 24/7 AI companion',
-                          icon: Icons.auto_awesome_rounded,
-                          isPrimary: true,
+                        _ChatWithAiCard(
+                          aiHandle: aiHandle,
+                          therapistName: _therapistUser?.firstName,
+                          hasMultipleTherapists: hasMultipleTherapists,
+                          therapistProfiles: _therapistProfiles,
+                          selectedIndex: _selectedTherapistIndex,
+                          onTherapistChanged: (index) {
+                            setState(() => _selectedTherapistIndex = index);
+                          },
                           onTap: _openAiTherapist,
                         ),
                         const SizedBox(height: 20),
@@ -562,11 +584,15 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: DashboardActionCard(
-                              title: 'Chat with $aiHandle',
-                              subtitle: 'Your 24/7 AI companion',
-                              icon: Icons.auto_awesome_rounded,
-                              isPrimary: true,
+                            child: _ChatWithAiCard(
+                              aiHandle: aiHandle,
+                              therapistName: _therapistUser?.firstName,
+                              hasMultipleTherapists: hasMultipleTherapists,
+                              therapistProfiles: _therapistProfiles,
+                              selectedIndex: _selectedTherapistIndex,
+                              onTherapistChanged: (index) {
+                                setState(() => _selectedTherapistIndex = index);
+                              },
                               onTap: _openAiTherapist,
                             ),
                           ),
@@ -711,4 +737,234 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
   }
 }
 
-// Action card moved to lib/widgets/dashboard_action_card.dart
+/// Custom chat card with therapist switcher when multiple therapists exist.
+class _ChatWithAiCard extends StatelessWidget {
+  final String aiHandle;
+  final String? therapistName;
+  final bool hasMultipleTherapists;
+  final List<TherapistProfile> therapistProfiles;
+  final int selectedIndex;
+  final ValueChanged<int> onTherapistChanged;
+  final VoidCallback onTap;
+
+  const _ChatWithAiCard({
+    required this.aiHandle,
+    this.therapistName,
+    required this.hasMultipleTherapists,
+    required this.therapistProfiles,
+    required this.selectedIndex,
+    required this.onTherapistChanged,
+    required this.onTap,
+  });
+
+  void _showTherapistSwitcher(BuildContext context) {
+    final theme = Theme.of(context);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+              child: Text(
+                'Switch AI companion',
+                style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                'Select which therapist\'s AI model you want to chat with:',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ...List.generate(therapistProfiles.length, (i) {
+              final profile = therapistProfiles[i];
+              final isSelected = i == selectedIndex;
+              final displayAiName = profile.aiName ?? 'KAI';
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                leading: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.surfaceContainerHighest,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      displayAiName.isNotEmpty ? displayAiName[0].toUpperCase() : '?',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: isSelected
+                            ? theme.colorScheme.onPrimary
+                            : theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                title: Text(
+                  displayAiName,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? theme.colorScheme.primary : null,
+                  ),
+                ),
+                subtitle: Text(
+                  'Created by ${profile.user.firstName} ${profile.user.lastName}'.trim(),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                trailing: isSelected
+                    ? Icon(Icons.check_circle_rounded, color: theme.colorScheme.primary)
+                    : null,
+                onTap: () {
+                  onTherapistChanged(i);
+                  Navigator.of(ctx).pop();
+                },
+              );
+            }),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final gradient = AppGradients.primaryFor(theme.brightness);
+
+    // Build subtitle with therapist name
+    String subtitle = 'Your 24/7 AI companion';
+    if (therapistName != null && therapistName!.isNotEmpty) {
+      subtitle = 'Trained by $therapistName';
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        gradient: gradient,
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.primary.withValues(alpha: 0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(32),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: Colors.white.withValues(alpha: 0.1),
+          highlightColor: Colors.white.withValues(alpha: 0.05),
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.auto_awesome_rounded,
+                        color: colorScheme.onPrimary,
+                        size: 32,
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      color: Colors.white.withValues(alpha: 0.5),
+                      size: 24,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 32),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Chat with $aiHandle',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.onPrimary,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onPrimary.withValues(alpha: 0.9),
+                        height: 1.4,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (hasMultipleTherapists) ...[
+                      const SizedBox(height: 16),
+                      GestureDetector(
+                        onTap: () => _showTherapistSwitcher(context),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.swap_horiz_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Switch therapist',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

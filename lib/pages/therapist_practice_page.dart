@@ -278,6 +278,30 @@ class _TherapistPracticePageState extends State<TherapistPracticePage> {
     }
 
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text('Practice Setup'),
+        centerTitle: true,
+        actions: [
+          OutlinedButton.icon(
+            onPressed: _logout,
+            icon: const Icon(Icons.logout, size: 18),
+            label: const Text('Logout'),
+            style: OutlinedButton.styleFrom(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
       body: SafeArea(
         child: Align(
           alignment: Alignment.topCenter,
@@ -288,27 +312,6 @@ class _TherapistPracticePageState extends State<TherapistPracticePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Therapii',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              color: scheme.primary,
-                              fontWeight: FontWeight.w800,
-                            ),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _logout,
-                        icon: const Icon(Icons.logout, size: 18),
-                        label: const Text('Logout'),
-                        style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        ),
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 28),
                   Text(
                     'About your Practice',

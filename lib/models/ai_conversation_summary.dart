@@ -7,6 +7,8 @@ class AiConversationSummary {
   final String summary;
   final DateTime createdAt;
   final List<AiMessagePart> transcript;
+  final String? therapistFeedback;
+  final DateTime? feedbackUpdatedAt;
 
   const AiConversationSummary({
     required this.id,
@@ -15,6 +17,8 @@ class AiConversationSummary {
     required this.summary,
     required this.createdAt,
     this.transcript = const <AiMessagePart>[],
+    this.therapistFeedback,
+    this.feedbackUpdatedAt,
   });
 
   Map<String, dynamic> toJson() => {
@@ -23,7 +27,29 @@ class AiConversationSummary {
         'summary': summary,
         'created_at': Timestamp.fromDate(createdAt),
         'transcript': transcript.map((m) => m.toJson()).toList(growable: false),
+        if (therapistFeedback != null) 'therapist_feedback': therapistFeedback,
+        if (feedbackUpdatedAt != null) 'feedback_updated_at': Timestamp.fromDate(feedbackUpdatedAt!),
       };
+
+  AiConversationSummary copyWith({
+    String? id,
+    String? patientId,
+    String? therapistId,
+    String? summary,
+    DateTime? createdAt,
+    List<AiMessagePart>? transcript,
+    String? therapistFeedback,
+    DateTime? feedbackUpdatedAt,
+  }) => AiConversationSummary(
+        id: id ?? this.id,
+        patientId: patientId ?? this.patientId,
+        therapistId: therapistId ?? this.therapistId,
+        summary: summary ?? this.summary,
+        createdAt: createdAt ?? this.createdAt,
+        transcript: transcript ?? this.transcript,
+        therapistFeedback: therapistFeedback ?? this.therapistFeedback,
+        feedbackUpdatedAt: feedbackUpdatedAt ?? this.feedbackUpdatedAt,
+      );
 
   factory AiConversationSummary.fromDoc(
     DocumentSnapshot<Map<String, dynamic>> doc,
@@ -36,6 +62,8 @@ class AiConversationSummary {
       summary: (data['summary'] ?? '').toString(),
       createdAt: _toDate(data['created_at']) ?? DateTime.fromMillisecondsSinceEpoch(0),
       transcript: _toTranscript(data['transcript']),
+      therapistFeedback: data['therapist_feedback'] as String?,
+      feedbackUpdatedAt: _toDate(data['feedback_updated_at']),
     );
   }
 

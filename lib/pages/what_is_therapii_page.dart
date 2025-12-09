@@ -20,7 +20,16 @@ class WhatIsTherapiiPage extends StatelessWidget {
     final borderOrange = const Color(0xFFFF7F50); // soft orange accent
 
     return Scaffold(
-      // AppBar removed per design request
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(

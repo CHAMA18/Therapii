@@ -492,8 +492,12 @@ class _PatientInvitationOnboardingDashboardPageState extends State<PatientInvita
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        centerTitle: false,
-        titleSpacing: 16,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        centerTitle: true,
         title: Text('Therapii Overview', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
       ),
       body: SafeArea(

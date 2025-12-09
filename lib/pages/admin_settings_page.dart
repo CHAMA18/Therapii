@@ -295,8 +295,13 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: const Text('Admin Settings'),
-        centerTitle: false,
+        centerTitle: true,
         elevation: 0,
       ),
       body: _loading

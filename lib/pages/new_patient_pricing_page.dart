@@ -24,6 +24,38 @@ class NewPatientPricingPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text('Therapii', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: brandTeal, fontWeight: FontWeight.w700)),
+        centerTitle: true,
+        actions: [
+          OutlinedButton.icon(
+            onPressed: () async {
+              await FirebaseAuthManager().signOut();
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const AuthWelcomePage(initialTab: AuthTab.login)),
+                  (route) => false,
+                );
+              }
+            },
+            icon: const Icon(Icons.logout),
+            label: const Text('Logout'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -33,30 +65,6 @@ class NewPatientPricingPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Top bar: Therapii wordmark + Logout pill
-                  Row(
-                    children: [
-                      Text('Therapii', style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: brandTeal, fontWeight: FontWeight.w700)),
-                      const Spacer(),
-                      OutlinedButton.icon(
-                        onPressed: () async {
-                          await FirebaseAuthManager().signOut();
-                          if (context.mounted) {
-                            Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(builder: (_) => const AuthWelcomePage(initialTab: AuthTab.login)),
-                              (route) => false,
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.logout),
-                        label: const Text('Logout'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 20),
 
                   Text('New Patient Pricing', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),

@@ -1,9 +1,7 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:therapii/foo.dart';
 import '../services/openai_trainer.dart';
@@ -17,10 +15,29 @@ class TherapistTrainingPage extends StatefulWidget {
   State<TherapistTrainingPage> createState() => _TherapistTrainingPageState();
 }
 
+// Predefined avatar options for AI personas
+const List<_AvatarOption> _avatarOptions = [
+  _AvatarOption(icon: Icons.psychology, color: Color(0xFF5C6BC0), label: 'Mindful'),
+  _AvatarOption(icon: Icons.favorite, color: Color(0xFFEC407A), label: 'Caring'),
+  _AvatarOption(icon: Icons.spa, color: Color(0xFF26A69A), label: 'Calm'),
+  _AvatarOption(icon: Icons.lightbulb, color: Color(0xFFFFB300), label: 'Insightful'),
+  _AvatarOption(icon: Icons.healing, color: Color(0xFF42A5F5), label: 'Healing'),
+  _AvatarOption(icon: Icons.self_improvement, color: Color(0xFF7E57C2), label: 'Balanced'),
+  _AvatarOption(icon: Icons.wb_sunny, color: Color(0xFFFF7043), label: 'Warm'),
+  _AvatarOption(icon: Icons.nature_people, color: Color(0xFF66BB6A), label: 'Grounded'),
+];
+
+class _AvatarOption {
+  final IconData icon;
+  final Color color;
+  final String label;
+  const _AvatarOption({required this.icon, required this.color, required this.label});
+}
+
 class _TherapistTrainingPageState extends State<TherapistTrainingPage> {
   final TextEditingController _nameController = TextEditingController();
-  Uint8List? _selectedImageBytes;
-  String? _selectedFileName;
+  final PageController _avatarPageController = PageController(viewportFraction: 0.4, initialPage: 0);
+  int _selectedAvatarIndex = 0;
   bool _loading = true;
   bool _saving = false;
 
@@ -51,16 +68,14 @@ class _TherapistTrainingPageState extends State<TherapistTrainingPage> {
           _nameController.text = name;
         }
 
-        final storedFileName = profile['file_name'];
-        if (storedFileName is String && storedFileName.isNotEmpty) {
-          _selectedFileName = storedFileName;
-        }
-
-        final imageValue = profile['profile_image'];
-        if (imageValue is Uint8List && imageValue.isNotEmpty) {
-          _selectedImageBytes = imageValue;
-        } else if (imageValue is Blob && imageValue.bytes.isNotEmpty) {
-          _selectedImageBytes = imageValue.bytes;
+        final avatarIndex = profile['avatar_index'];
+        if (avatarIndex is int && avatarIndex >= 0 && avatarIndex < _avatarOptions.length) {
+          _selectedAvatarIndex = avatarIndex;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _avatarPageController.hasClients) {
+              _avatarPageController.jumpToPage(avatarIndex);
+            }
+          });
         }
       }
     } catch (_) {
@@ -72,48 +87,8 @@ class _TherapistTrainingPageState extends State<TherapistTrainingPage> {
     }
   }
 
-  Future<void> _pickImage() async {
-    if (_saving) return;
-
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        withData: true,
-      );
-
-      if (result == null || result.files.isEmpty) {
-        return;
-      }
-
-      final picked = result.files.first;
-      final bytes = picked.bytes;
-      if (bytes == null || bytes.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to read that file. Please try another image.')),
-        );
-        return;
-      }
-
-      const maxBytes = 5 * 1024 * 1024; // 5 MB guard so Firestore write stays lightweight.
-      if (bytes.length > maxBytes) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please choose an image smaller than 5MB.')),
-        );
-        return;
-      }
-
-      setState(() {
-        _selectedImageBytes = bytes;
-        _selectedFileName = picked.name;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Image selection failed. Please try again.')),
-      );
-    }
+  void _onAvatarChanged(int index) {
+    setState(() => _selectedAvatarIndex = index);
   }
 
   Future<void> _handleStartTraining() async {
@@ -133,13 +108,6 @@ class _TherapistTrainingPageState extends State<TherapistTrainingPage> {
       return;
     }
 
-    if (_selectedImageBytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a profile picture for your AI.')),
-      );
-      return;
-    }
-
     setState(() => _saving = true);
 
     final docRef = FirebaseFirestore.instance.collection('therapists').doc(user.uid);
@@ -148,10 +116,13 @@ class _TherapistTrainingPageState extends State<TherapistTrainingPage> {
       final snapshot = await docRef.get();
       final existingData = snapshot.data() ?? <String, dynamic>{};
 
+      final selectedAvatar = _avatarOptions[_selectedAvatarIndex];
       final aiProfilePayload = <String, dynamic>{
         'name': name,
-        'profile_image': _selectedImageBytes,
-        if (_selectedFileName != null) 'file_name': _selectedFileName,
+        'avatar_index': _selectedAvatarIndex,
+        'avatar_icon': selectedAvatar.icon.codePoint,
+        'avatar_color': selectedAvatar.color.value,
+        'avatar_label': selectedAvatar.label,
       };
 
       await docRef.set(
@@ -166,7 +137,7 @@ class _TherapistTrainingPageState extends State<TherapistTrainingPage> {
       final combinedData = Map<String, dynamic>.from(existingData)
         ..['ai_training_profile'] = {
           'name': name,
-          if (_selectedFileName != null) 'file_name': _selectedFileName,
+          'avatar_label': selectedAvatar.label,
         };
 
       final prompt = _buildTrainingPrompt(
@@ -230,7 +201,7 @@ class _TherapistTrainingPageState extends State<TherapistTrainingPage> {
     final buffer = StringBuffer();
 
     final aiProfile = therapistData['ai_training_profile'];
-    final avatarFileName = aiProfile is Map<String, dynamic> ? _normalizeString(aiProfile['file_name']) : null;
+    final avatarStyle = aiProfile is Map<String, dynamic> ? _normalizeString(aiProfile['avatar_label']) : null;
 
     final therapistName = _normalizeString(therapistData['full_name']);
     final practiceName = _normalizeString(therapistData['practice_name']);
@@ -255,7 +226,7 @@ class _TherapistTrainingPageState extends State<TherapistTrainingPage> {
       if (locationParts.isNotEmpty) 'Location: ${locationParts.join(', ')}',
       if (email != null) 'Contact email: $email',
       if (phone != null) 'Contact phone: $phone',
-      if (avatarFileName != null) 'Avatar file name: $avatarFileName',
+      if (avatarStyle != null) 'Avatar personality style: $avatarStyle',
     ];
 
     if (hasPsychologyProfile is bool) {
@@ -437,6 +408,7 @@ class _TherapistTrainingPageState extends State<TherapistTrainingPage> {
   @override
   void dispose() {
     _nameController.dispose();
+    _avatarPageController.dispose();
     super.dispose();
   }
 
@@ -450,6 +422,16 @@ class _TherapistTrainingPageState extends State<TherapistTrainingPage> {
 
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -483,34 +465,95 @@ class _TherapistTrainingPageState extends State<TherapistTrainingPage> {
                         height: 1.4,
                       ),
                     ),
-                    const SizedBox(height: 40),
-                    GestureDetector(
-                      onTap: _pickImage,
-                      child: Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: const Color(0xFFEAF0FB),
-                          border: Border.all(color: const Color(0xFFD5DEEF)),
-                          image: _selectedImageBytes != null
-                              ? DecorationImage(
-                                  image: MemoryImage(_selectedImageBytes!),
-                                  fit: BoxFit.cover,
-                                )
-                              : null,
-                        ),
-                        alignment: Alignment.center,
-                        child: _selectedImageBytes == null
-                            ? const Icon(
-                                Icons.camera_alt_outlined,
-                                size: 34,
-                                color: Color(0xFF9AA7C7),
-                              )
-                            : null,
+                    const SizedBox(height: 32),
+                    // Avatar carousel
+                    SizedBox(
+                      height: 160,
+                      child: PageView.builder(
+                        controller: _avatarPageController,
+                        onPageChanged: _onAvatarChanged,
+                        itemCount: _avatarOptions.length,
+                        physics: const BouncingScrollPhysics(),
+                        itemBuilder: (context, index) {
+                          final avatar = _avatarOptions[index];
+                          final isSelected = index == _selectedAvatarIndex;
+                          return AnimatedScale(
+                            scale: isSelected ? 1.0 : 0.75,
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOutCubic,
+                            child: AnimatedOpacity(
+                              opacity: isSelected ? 1.0 : 0.5,
+                              duration: const Duration(milliseconds: 200),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 100,
+                                    height: 100,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          avatar.color.withValues(alpha: 0.9),
+                                          avatar.color,
+                                        ],
+                                      ),
+                                      boxShadow: isSelected
+                                          ? [
+                                              BoxShadow(
+                                                color: avatar.color.withValues(alpha: 0.4),
+                                                blurRadius: 20,
+                                                spreadRadius: 2,
+                                              ),
+                                            ]
+                                          : null,
+                                      border: Border.all(
+                                        color: isSelected ? Colors.white : Colors.transparent,
+                                        width: 3,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      avatar.icon,
+                                      size: 44,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    avatar.label,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                                      color: isSelected ? avatar.color : const Color(0xFF9AA7C7),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
-                    const SizedBox(height: 30),
+                    // Swipe hint
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.chevron_left, size: 20, color: const Color(0xFFB0BEC5)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Swipe to choose avatar',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: const Color(0xFF9AA7C7),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(Icons.chevron_right, size: 20, color: const Color(0xFFB0BEC5)),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
                     TextField(
                       controller: _nameController,
                       textAlign: TextAlign.center,

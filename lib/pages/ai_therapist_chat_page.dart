@@ -480,6 +480,11 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: Text('Chat with $_aiName'),
         centerTitle: true,
         actions: [

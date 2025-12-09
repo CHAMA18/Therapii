@@ -1,8 +1,13 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const axios = require('axios');
+const { Resend } = require('resend');
 
 admin.initializeApp();
+
+// Resend API configuration
+const RESEND_API_KEY = process.env.RESEND_API_KEY || 're_EkWubvjF_N4qqb9JD1BHkTuNZ2acKEwD9';
+const RESEND_FROM_EMAIL = 'updates@trytherapii.com';
 
 /**
  * Get Stripe instance with secret key from environment
@@ -195,19 +200,48 @@ exports.createInvitationAndSendEmail = functions.https.onCall(async (data, conte
 
     let emailSent = false;
     
-    // Fetch email configuration from Firestore/env
-    const emailConfig = await getEmailConfig();
-    
-    if (emailConfig.enabled) {
-      try {
-        // Build email body
-        const emailBody = `Hello ${patientFirstName},
+    try {
+      // Build email HTML body with professional styling
+      const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+    <h1 style="color: white; margin: 0; font-size: 24px;">Welcome to Therapii</h1>
+  </div>
+  <div style="background: #ffffff; padding: 30px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 12px 12px;">
+    <p style="font-size: 16px;">Hello ${patientFirstName},</p>
+    <p style="font-size: 16px;">We're glad to be part of your journey toward better mental well-being.</p>
+    <p style="font-size: 16px;">To connect securely with your therapist in the app, please use the one-time connection code below:</p>
+    <div style="background: #f5f7fa; border-radius: 8px; padding: 20px; text-align: center; margin: 25px 0;">
+      <p style="margin: 0 0 10px 0; font-size: 14px; color: #666;">🔐 Your Connection Code</p>
+      <p style="font-size: 32px; font-weight: bold; color: #1e3a5f; letter-spacing: 8px; margin: 0;">${code}</p>
+    </div>
+    <p style="font-size: 16px; font-weight: 600;">Here's how to use it:</p>
+    <ol style="font-size: 16px; padding-left: 20px;">
+      <li style="margin-bottom: 8px;">Open the Therapii mobile app.</li>
+      <li style="margin-bottom: 8px;">Tap "Connect with Therapist."</li>
+      <li style="margin-bottom: 8px;">Enter the 5-digit code shown above.</li>
+    </ol>
+    <p style="font-size: 16px;">Once you submit the code, your account will be linked directly to your therapist, allowing you to securely exchange messages, schedule sessions, and share updates.</p>
+    <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 25px 0;">
+    <p style="font-size: 14px; color: #666;">If you did not request this code, please ignore this email or contact us immediately at <a href="mailto:support@therapii.com" style="color: #2d5a87;">support@therapii.com</a>.</p>
+    <p style="font-size: 16px; margin-top: 25px;">Warm regards,<br><strong>The Therapii Team</strong></p>
+  </div>
+</body>
+</html>`;
+
+      const emailText = `Hello ${patientFirstName},
 
 Welcome to Therapii – we're glad to be part of your journey toward better mental well-being.
 
 To connect securely with your therapist in the app, please use the one-time connection code below:
 
-🔐 Your Code: ${code}
+Your Code: ${code}
 
 Here's how to use it:
 
@@ -222,39 +256,27 @@ If you did not request this code, please ignore this email or contact us immedia
 Warm regards,
 The Therapii Team`;
 
-        // Write email document to Firestore for Firebase extension to process
-        const emailDoc = {
-          to: [patientEmail],
-          message: {
-            subject: 'Your Unique Therapii Connection Code',
-            text: emailBody,
-            html: emailBody.replace(/\n/g, '<br>'),
-          },
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          metadata: {
-            invitationId: invitationRef.id,
-            code: code,
-            patientFirstName: patientFirstName,
-          }
-        };
+      // Send email using Resend API
+      const resend = new Resend(RESEND_API_KEY);
+      const { data, error } = await resend.emails.send({
+        from: `Therapii <${RESEND_FROM_EMAIL}>`,
+        to: [patientEmail],
+        subject: 'Your Unique Therapii Connection Code',
+        html: emailHtml,
+        text: emailText,
+      });
 
-        // Add sender information if configured
-        if (emailConfig.fromEmail) {
-          emailDoc.from = emailConfig.fromName 
-            ? `${emailConfig.fromName} <${emailConfig.fromEmail}>`
-            : emailConfig.fromEmail;
-        }
-
-        await admin.firestore().collection('mail').add(emailDoc);
+      if (error) {
+        console.error('Resend API error:', error);
+        // Log error but don't fail - invitation is already created
+      } else {
         emailSent = true;
-        console.log(`Email queued successfully for ${patientEmail}`);
-      } catch (emailError) {
-        console.error('Failed to queue email:', emailError);
-        // Don't fail the entire function if email fails - invitation is already created
-        // The user can still manually share the code
+        console.log(`Email sent successfully via Resend for ${patientEmail}`, data);
       }
-    } else {
-      console.log('Email not configured in Admin Settings; skipping email delivery.');
+    } catch (emailError) {
+      console.error('Failed to send email via Resend:', emailError);
+      // Don't fail the entire function if email fails - invitation is already created
+      // The user can still manually share the code
     }
 
     // Return invitation data

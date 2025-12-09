@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:typed_data';
 import 'package:file_selector/file_selector.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -443,8 +444,49 @@ class _LoginFormState extends State<_LoginForm> {
   bool agreeTos = false;
   bool agreePrivacy = true; // match screenshot
   bool _isLoading = false;
+  bool _rememberMe = false;
   final FirebaseAuthManager _authManager = FirebaseAuthManager();
   AccountRole? _role; // Require explicit selection; no default
+
+  static const _rememberEmailKey = 'remember_email';
+  static const _rememberMeKey = 'remember_me';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRememberedEmail();
+  }
+
+  Future<void> _loadRememberedEmail() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final remembered = prefs.getBool(_rememberMeKey) ?? false;
+      final email = prefs.getString(_rememberEmailKey) ?? '';
+      if (mounted && remembered && email.isNotEmpty) {
+        setState(() {
+          _rememberMe = true;
+          emailCtl.text = email;
+        });
+      }
+    } catch (e) {
+      debugPrint('[Auth] Failed to load remembered email: $e');
+    }
+  }
+
+  Future<void> _saveRememberedEmail() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberMe) {
+        await prefs.setBool(_rememberMeKey, true);
+        await prefs.setString(_rememberEmailKey, emailCtl.text.trim());
+      } else {
+        await prefs.remove(_rememberMeKey);
+        await prefs.remove(_rememberEmailKey);
+      }
+    } catch (e) {
+      debugPrint('[Auth] Failed to save remembered email: $e');
+    }
+  }
 
   @override
   void dispose() {
@@ -465,6 +507,7 @@ class _LoginFormState extends State<_LoginForm> {
     }
 
     setState(() => _isLoading = true);
+    await _saveRememberedEmail();
     try {
       final user = await _authManager.signInWithEmail(
         context,
@@ -631,12 +674,22 @@ class _LoginFormState extends State<_LoginForm> {
       const SizedBox(height: 12),
       PasswordTextField(controller: passCtl, hintText: 'Password'),
       const SizedBox(height: 8),
-      Align(
-        alignment: Alignment.centerRight,
-        child: TextButton(
-          onPressed: _isLoading ? null : _forgotPassword,
-          child: const Text('Forgot Password?'),
-        ),
+      Row(
+        children: [
+          Checkbox(
+            value: _rememberMe,
+            onChanged: _isLoading ? null : (v) => setState(() => _rememberMe = v ?? false),
+          ),
+          GestureDetector(
+            onTap: _isLoading ? null : () => setState(() => _rememberMe = !_rememberMe),
+            child: Text('Remember Me', style: Theme.of(context).textTheme.bodyMedium),
+          ),
+          const Spacer(),
+          TextButton(
+            onPressed: _isLoading ? null : _forgotPassword,
+            child: const Text('Forgot Password?'),
+          ),
+        ],
       ),
       const SizedBox(height: 16),
       PrimaryButton(

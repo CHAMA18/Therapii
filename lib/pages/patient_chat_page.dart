@@ -164,6 +164,11 @@ class _PatientChatPageState extends State<PatientChatPage> {
         elevation: 0,
         centerTitle: true,
         foregroundColor: Colors.black,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: Text(
           _displayName,
           style: const TextStyle(

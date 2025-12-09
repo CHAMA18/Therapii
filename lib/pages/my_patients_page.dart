@@ -509,10 +509,24 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: const Text('My Patients'),
         centerTitle: true,
         scrolledUnderElevation: 0,
         backgroundColor: Colors.transparent,
+        actions: [
+          Builder(
+            builder: (ctx) => IconButton(
+              icon: const Icon(Icons.menu),
+              tooltip: 'Menu',
+              onPressed: () => Scaffold.of(ctx).openDrawer(),
+            ),
+          ),
+        ],
       ),
       drawer: const CommonSettingsDrawer(),
       body: SafeArea(

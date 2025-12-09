@@ -114,4 +114,14 @@ class AiConversationService {
     if (!doc.exists) return null;
     return AiConversationSummary.fromDoc(doc);
   }
+
+  Future<void> saveTherapistFeedback({
+    required String summaryId,
+    required String feedback,
+  }) async {
+    await _col().doc(summaryId).update({
+      'therapist_feedback': feedback,
+      'feedback_updated_at': Timestamp.fromDate(DateTime.now()),
+    });
+  }
 }

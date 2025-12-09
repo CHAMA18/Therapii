@@ -350,17 +350,6 @@ class _BillingPageState extends State<BillingPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate.fixed([
-                      _PaymentMethodCard(
-                        paymentMethod: _paymentMethod,
-                        isPaidUser: _isPaidUser,
-                        isLoading: _isLoadingBilling,
-                        onUpdate: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Payment method updates will be available shortly.')),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 20),
                       _CreditActionsCard(
                         appliedCoupon: _appliedCoupon,
                         onRedeem: () => _showRedeemCodeDialog(context),

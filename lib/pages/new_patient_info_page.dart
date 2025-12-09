@@ -173,6 +173,18 @@ class _NewPatientInfoPageState extends State<NewPatientInfoPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text('Invite Patient'),
+        centerTitle: true,
+      ),
       body: SafeArea(
         child: Stack(
           children: [
