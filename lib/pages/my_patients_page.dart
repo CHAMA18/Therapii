@@ -523,16 +523,13 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
         scrolledUnderElevation: 0,
         backgroundColor: Colors.transparent,
         actions: [
-          Builder(
-            builder: (ctx) => IconButton(
-              icon: const Icon(Icons.menu),
-              tooltip: 'Menu',
-              onPressed: () => Scaffold.of(ctx).openEndDrawer(),
-            ),
+          IconButton(
+            icon: const Icon(Icons.settings_rounded),
+            tooltip: 'Settings',
+            onPressed: () => showSettingsPopup(context),
           ),
         ],
       ),
-      endDrawer: const CommonSettingsDrawer(),
       body: SafeArea(
         child: Builder(builder: (innerContext) {
           if (!_loading) {

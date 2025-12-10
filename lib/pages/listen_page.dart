@@ -145,56 +145,16 @@ class _ListenPageState extends State<ListenPage> {
       return;
     }
 
-    app_user.User? selected = _activePatients.first;
-    final confirmed = await showModalBottomSheet<bool>(
+    final selected = await showModalBottomSheet<app_user.User>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
-            top: 16,
-          ),
-          child: StatefulBuilder(
-            builder: (context, setSheetState) => Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Record for patient', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<app_user.User>(
-                  value: selected,
-                  decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Select patient'),
-                  items: _activePatients
-                      .map((u) => DropdownMenuItem(
-                            value: u,
-                            child: Text(u.fullName.isNotEmpty ? u.fullName : u.email),
-                          ))
-                      .toList(),
-                  onChanged: (v) => setSheetState(() => selected = v),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () => Navigator.of(ctx).pop(true),
-                    icon: const Icon(Icons.mic),
-                    label: const Text('Start recording'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _RecordPatientSelectionSheet(patients: _activePatients),
     );
 
-    if (confirmed == true && mounted && selected != null) {
+    if (selected != null && mounted) {
       Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => TherapistVoiceConversationPage(patient: selected!)),
+        MaterialPageRoute(builder: (_) => TherapistVoiceConversationPage(patient: selected)),
       );
     }
   }
@@ -368,16 +328,6 @@ class _ListenPageState extends State<ListenPage> {
       iconColor: Colors.blue,
       title: 'Active patients',
       subtitle: subtitle,
-      headerAction: OutlinedButton.icon(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const MyPatientsPage()),
-        ),
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        ),
-        icon: const Icon(Icons.people_outline, size: 18),
-        label: const Text('Manage'),
-      ),
       child: _loading
           ? const Column(
               children: [
@@ -553,22 +503,19 @@ class _ListenPageState extends State<ListenPage> {
         ),
         centerTitle: true,
         actions: [
-          Builder(
-            builder: (ctx) => IconButton(
-              icon: const Icon(Icons.menu),
-              tooltip: 'Menu',
-              onPressed: () => Scaffold.of(ctx).openDrawer(),
-            ),
+          IconButton(
+            icon: const Icon(Icons.settings_rounded),
+            tooltip: 'Settings',
+            onPressed: () => showSettingsPopup(context),
           ),
         ],
       ),
-      drawer: const CommonSettingsDrawer(),
       body: SafeArea(
         child: Builder(
           builder: (innerContext) => RefreshIndicator(
             onRefresh: _loadActivePatients,
             child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               child: Center(
                 child: ConstrainedBox(
@@ -747,6 +694,297 @@ class _VoiceCheckinTile extends StatelessWidget {
               icon: const Icon(Icons.open_in_new, size: 20),
               color: scheme.primary,
               tooltip: 'Open audio',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecordPatientSelectionSheet extends StatefulWidget {
+  final List<app_user.User> patients;
+  const _RecordPatientSelectionSheet({required this.patients});
+
+  @override
+  State<_RecordPatientSelectionSheet> createState() => _RecordPatientSelectionSheetState();
+}
+
+class _RecordPatientSelectionSheetState extends State<_RecordPatientSelectionSheet> {
+  app_user.User? _selectedPatient;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.patients.isNotEmpty) {
+      _selectedPatient = widget.patients.first;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
+
+    return Container(
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white, Colors.grey.shade50],
+        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 30, offset: const Offset(0, -10)),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [scheme.primary.withValues(alpha: 0.1), scheme.primary.withValues(alpha: 0.05)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.mic_rounded, size: 36, color: scheme.primary),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Record Voice Check-in',
+                  style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Select a patient to create a personalized voice note',
+                  style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                _FeatureMiniCard(
+                  icon: Icons.record_voice_over_rounded,
+                  label: 'Quick Notes',
+                  color: Colors.orange,
+                ),
+                const SizedBox(width: 12),
+                _FeatureMiniCard(
+                  icon: Icons.cloud_upload_outlined,
+                  label: 'Auto-Save',
+                  color: Colors.teal,
+                ),
+                const SizedBox(width: 12),
+                _FeatureMiniCard(
+                  icon: Icons.history_rounded,
+                  label: 'Instant Access',
+                  color: Colors.indigo,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.people_alt_rounded, size: 18, color: scheme.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Select Patient',
+                        style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, color: scheme.onSurface),
+                      ),
+                    ],
+                  ),
+                ),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    itemCount: widget.patients.length,
+                    itemBuilder: (context, index) {
+                      final patient = widget.patients[index];
+                      final isSelected = _selectedPatient?.id == patient.id;
+                      final displayName = patient.fullName.isNotEmpty ? patient.fullName : patient.email;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Material(
+                          color: isSelected ? scheme.primary : Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          child: InkWell(
+                            onTap: () => setState(() => _selectedPatient = patient),
+                            borderRadius: BorderRadius.circular(14),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isSelected ? scheme.primary : Colors.grey.shade200,
+                                  width: isSelected ? 2 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: isSelected ? Colors.white.withValues(alpha: 0.2) : scheme.primary.withValues(alpha: 0.1),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
+                                        style: theme.textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          color: isSelected ? Colors.white : scheme.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          displayName,
+                                          style: theme.textTheme.titleSmall?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: isSelected ? Colors.white : scheme.onSurface,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          patient.email,
+                                          style: theme.textTheme.bodySmall?.copyWith(
+                                            color: isSelected ? Colors.white.withValues(alpha: 0.8) : scheme.onSurfaceVariant,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (isSelected)
+                                    Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.25),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.check_rounded, size: 18, color: Colors.white),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Padding(
+            padding: EdgeInsets.fromLTRB(24, 0, 24, bottomPadding + 24),
+            child: SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: FilledButton(
+                onPressed: _selectedPatient == null ? null : () => Navigator.of(context).pop(_selectedPatient),
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 0,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.mic_rounded, size: 22, color: Colors.white),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Start Recording',
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeatureMiniCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  const _FeatureMiniCard({required this.icon, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.15)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 22, color: color),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600, color: color.withValues(alpha: 0.9)),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

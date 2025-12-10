@@ -380,8 +380,12 @@ class _TherapistDashboardPageState extends State<TherapistDashboardPage> {
         centerTitle: true,
         scrolledUnderElevation: 0,
         backgroundColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.settings_rounded),
+          tooltip: 'Settings',
+          onPressed: () => showSettingsPopup(context),
+        ),
       ),
-      drawer: const CommonSettingsDrawer(),
       body: body,
     );
   }

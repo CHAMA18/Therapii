@@ -113,76 +113,212 @@ class _BillingPageState extends State<BillingPage> {
     }
   }
 
-  Future<void> _showRedeemCodeDialog(BuildContext context) async {
+  Future<void> _showRedeemCodeSheet(BuildContext context) async {
     final codeController = TextEditingController();
-    final result = await showDialog<bool>(
+    bool isSubmitting = false;
+
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Redeem Code'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Enter your gift or credit code below:'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: codeController,
-              decoration: const InputDecoration(
-                labelText: 'Code',
-                hintText: 'Enter code',
-                border: OutlineInputBorder(),
-              ),
-              textCapitalization: TextCapitalization.characters,
-              autofocus: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        final theme = Theme.of(sheetCtx);
+        final scheme = theme.colorScheme;
+        final bottomInset = MediaQuery.of(sheetCtx).viewInsets.bottom;
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset + 24),
+          child: StatefulBuilder(
+            builder: (ctx, setState) {
+              return DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  gradient: LinearGradient(
+                    colors: [
+                      scheme.surface.withValues(alpha: 0.96),
+                      scheme.surfaceVariant.withValues(alpha: 0.94),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: scheme.primary.withValues(alpha: 0.2),
+                      blurRadius: 34,
+                      offset: const Offset(0, 20),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 38,
+                              height: 4,
+                              margin: const EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(
+                                color: scheme.onSurface.withValues(alpha: 0.16),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Container(
+                                height: 48,
+                                width: 48,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [scheme.primary, scheme.secondary],
+                                  ),
+                                ),
+                                child: Icon(Icons.card_giftcard_rounded, color: scheme.onPrimary),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Redeem credits', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Drop in your gift or corporate stipend code. Credits apply instantly to your next invoice.',
+                                      style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface.withValues(alpha: 0.65)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              _MiniCard(
+                                icon: Icons.bolt_rounded,
+                                title: 'Instant apply',
+                                subtitle: 'Discounts show on the next invoice in seconds.',
+                                accent: scheme.primary,
+                              ),
+                              _MiniCard(
+                                icon: Icons.security_rounded,
+                                title: 'Secure & private',
+                                subtitle: 'Codes are validated via encrypted Stripe connection.',
+                                accent: scheme.tertiary,
+                              ),
+                              _MiniCard(
+                                icon: Icons.groups_2_rounded,
+                                title: 'Team ready',
+                                subtitle: 'Share credits with your care team or finance partner.',
+                                accent: scheme.secondary,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          TextField(
+                            controller: codeController,
+                            textCapitalization: TextCapitalization.characters,
+                            autofocus: true,
+                            maxLength: 32,
+                            decoration: InputDecoration(
+                              counterText: '',
+                              labelText: 'Code',
+                              hintText: 'E.g. THERAPII-2024-THANKS',
+                              filled: true,
+                              fillColor: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                              prefixIcon: const Icon(Icons.confirmation_number_rounded),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+                                  child: const Text('Maybe later'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: FilledButton.icon(
+                                  onPressed: isSubmitting
+                                      ? null
+                                      : () async {
+                                          final code = codeController.text.trim();
+                                          if (code.isEmpty) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Please enter a code to redeem.')),
+                                            );
+                                            return;
+                                          }
+                                          setState(() => isSubmitting = true);
+                                          try {
+                                            final callable = FirebaseFunctions.instance.httpsCallable('redeemStripeCode');
+                                            final response = await callable.call({'code': code});
+                                            final data = response.data as Map<String, dynamic>;
+
+                                            if (!mounted) return;
+                                            Navigator.pop(ctx);
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text(data['message'] as String? ?? 'Code redeemed successfully!'),
+                                                backgroundColor: Colors.green,
+                                              ),
+                                            );
+                                            _fetchBillingDetails();
+                                          } catch (e) {
+                                            debugPrint('Error redeeming code: $e');
+                                            if (!mounted) return;
+                                            setState(() => isSubmitting = false);
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('Failed to redeem code: ${e.toString().replaceAll('Exception: ', '')}'),
+                                                backgroundColor: Colors.red,
+                                              ),
+                                            );
+                                          }
+                                        },
+                                  icon: isSubmitting
+                                      ? SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: scheme.onPrimary,
+                                          ),
+                                        )
+                                      : const Icon(Icons.rocket_launch_rounded),
+                                  label: Text(isSubmitting ? 'Applying...' : 'Apply credits'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Redeem'),
-          ),
-        ],
-      ),
+        );
+      },
     );
 
-    if (result == true && codeController.text.trim().isNotEmpty && mounted) {
-      try {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Redeeming code...')),
-        );
-        
-        final callable = FirebaseFunctions.instance.httpsCallable('redeemStripeCode');
-        final response = await callable.call({'code': codeController.text.trim()});
-        final data = response.data as Map<String, dynamic>;
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(data['message'] as String? ?? 'Code redeemed successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          // Refresh billing data
-          _fetchBillingDetails();
-        }
-      } catch (e) {
-        debugPrint('Error redeeming code: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to redeem code: ${e.toString().replaceAll('Exception: ', '')}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
     codeController.dispose();
   }
 
@@ -352,7 +488,7 @@ class _BillingPageState extends State<BillingPage> {
                     delegate: SliverChildListDelegate.fixed([
                       _CreditActionsCard(
                         appliedCoupon: _appliedCoupon,
-                        onRedeem: () => _showRedeemCodeDialog(context),
+                        onRedeem: () => _showRedeemCodeSheet(context),
                       ),
                       const SizedBox(height: 28),
                       _InvoiceHistory(
@@ -1232,3 +1368,72 @@ class _Invoice {
 }
 
 enum _InvoiceStatus { paid, dueSoon, overdue }
+
+class _MiniCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color accent;
+
+  const _MiniCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      constraints: const BoxConstraints(minWidth: 180),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: accent.withValues(alpha: 0.08),
+        border: Border.all(color: accent.withValues(alpha: 0.22)),
+        boxShadow: [
+          BoxShadow(color: accent.withValues(alpha: 0.14), blurRadius: 20, offset: const Offset(0, 14)),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: scheme.surface,
+            ),
+            child: Icon(icon, color: accent, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: accent,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurface.withValues(alpha: 0.7), height: 1.35),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
