@@ -9,7 +9,6 @@ import 'package:therapii/pages/my_patients_page.dart';
 import 'package:therapii/pages/listen_page.dart';
 import 'package:therapii/pages/therapist_details_page.dart';
 import 'package:therapii/pages/therapist_practice_personalization_page.dart';
-import 'package:therapii/pages/therapist_training_page.dart';
 import 'package:therapii/pages/therapist_therapeutic_models_page.dart';
 import 'package:therapii/pages/support_center_page.dart';
 import 'package:therapii/pages/billing_page.dart';
@@ -271,17 +270,6 @@ class _TherapistDashboardPageState extends State<TherapistDashboardPage> {
                             children: [
                               Expanded(
                                 child: DashboardActionCard(
-                                  title: 'Training Studio',
-                                  subtitle: 'Upload profile image and start AI training',
-                                  icon: Icons.smart_toy_outlined,
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const TherapistTrainingPage()),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: gap),
-                              Expanded(
-                                child: DashboardActionCard(
                                   title: 'Therapeutic Models',
                                   subtitle: 'Core approaches for your practice',
                                   icon: Icons.psychology_alt_outlined,
@@ -290,34 +278,7 @@ class _TherapistDashboardPageState extends State<TherapistDashboardPage> {
                                   ),
                                 ),
                               ),
-                            ],
-                          )
-                        else ...[
-                          DashboardActionCard(
-                            title: 'Training Studio',
-                            subtitle: 'Upload profile image and start AI training',
-                            icon: Icons.smart_toy_outlined,
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const TherapistTrainingPage()),
-                            ),
-                          ),
-                          SizedBox(height: gap),
-                          DashboardActionCard(
-                            title: 'Therapeutic Models',
-                            subtitle: 'Core approaches for your practice',
-                            icon: Icons.psychology_alt_outlined,
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const TherapistTherapeuticModelsPage()),
-                            ),
-                          ),
-                        ],
-
-                        SizedBox(height: gap),
-                        // Row 4
-                        if (isWide)
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
+                              SizedBox(width: gap),
                               Expanded(
                                 child: DashboardActionCard(
                                   title: 'Billing',
@@ -328,20 +289,18 @@ class _TherapistDashboardPageState extends State<TherapistDashboardPage> {
                                   ),
                                 ),
                               ),
-                              SizedBox(width: gap),
-                              Expanded(
-                                child: DashboardActionCard(
-                                  title: 'Support Center',
-                                  subtitle: 'FAQs and help resources',
-                                  icon: Icons.help_center_rounded,
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const SupportCenterPage()),
-                                  ),
-                                ),
-                              ),
                             ],
                           )
                         else ...[
+                          DashboardActionCard(
+                            title: 'Therapeutic Models',
+                            subtitle: 'Core approaches for your practice',
+                            icon: Icons.psychology_alt_outlined,
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const TherapistTherapeuticModelsPage()),
+                            ),
+                          ),
+                          SizedBox(height: gap),
                           DashboardActionCard(
                             title: 'Billing',
                             subtitle: 'Manage subscription and invoices',
@@ -350,16 +309,18 @@ class _TherapistDashboardPageState extends State<TherapistDashboardPage> {
                               MaterialPageRoute(builder: (_) => const BillingPage()),
                             ),
                           ),
-                          SizedBox(height: gap),
-                          DashboardActionCard(
-                            title: 'Support Center',
-                            subtitle: 'FAQs and help resources',
-                            icon: Icons.help_center_rounded,
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const SupportCenterPage()),
-                            ),
-                          ),
                         ],
+
+                        SizedBox(height: gap),
+                        // Row 4
+                        DashboardActionCard(
+                          title: 'Support Center',
+                          subtitle: 'FAQs and help resources',
+                          icon: Icons.help_center_rounded,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const SupportCenterPage()),
+                          ),
+                        ),
                       ];
 
                   return Column(children: columnChildren());

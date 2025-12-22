@@ -97,7 +97,7 @@ class TherapistDetailsPage extends StatefulWidget {
 }
 
 class _TherapistDetailsPageState extends State<TherapistDetailsPage> {
-  int _currentPage = 0;
+  final int _currentPage = 0;
   final PageController _pageController = PageController();
 
   final TextEditingController _nameCtrl = TextEditingController();
@@ -295,7 +295,7 @@ class _TherapistDetailsPageState extends State<TherapistDetailsPage> {
     if (structured is Iterable) {
       for (final item in structured) {
         if (item is Map) {
-          final entry = EducationEntry.fromJson(Map<String, dynamic>.from(item as Map));
+          final entry = EducationEntry.fromJson(Map<String, dynamic>.from(item));
           final label = entry.displayLabel;
           if (label.trim().isEmpty) continue;
           if (seen.add(label)) {
@@ -372,14 +372,6 @@ class _TherapistDetailsPageState extends State<TherapistDetailsPage> {
                     return null;
                   },
                 ),
-                if (errorText != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(
-                      errorText,
-                      style: TextStyle(color: Theme.of(builderContext).colorScheme.error, fontSize: 12),
-                    ),
-                  ),
               ],
             ),
           ),

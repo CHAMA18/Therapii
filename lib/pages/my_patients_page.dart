@@ -37,7 +37,7 @@ class MyPatientsPage extends StatefulWidget {
 }
 
 class _MyPatientsPageState extends State<MyPatientsPage> {
-  TopNavSection _selected = TopNavSection.patients;
+  final TopNavSection _selected = TopNavSection.patients;
 
   final _invitationService = InvitationService();
   final _userService = UserService();
@@ -84,7 +84,7 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
   Widget _buildPatientTile(AppUser.User user) {
     final displayName = user.fullName.isNotEmpty ? user.fullName : user.email;
     final therapistId = _therapistId;
-    final openChat = () => Navigator.of(context).push(
+    Future openChat() => Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => PatientChatPage(otherUser: user),
           ),
@@ -569,7 +569,7 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _greeting() + ',',
+                                    '${_greeting()},',
                                     style: theme.textTheme.headlineMedium?.copyWith(
                                       color: theme.colorScheme.onSurface,
                                       fontWeight: FontWeight.w400,
@@ -718,7 +718,7 @@ class _TopNav extends StatelessWidget {
           icon: const Icon(Icons.menu),
           color: theme.colorScheme.onSurface,
           style: IconButton.styleFrom(
-            backgroundColor: theme.colorScheme.surfaceVariant.withOpacity(0.6),
+            backgroundColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.6),
             padding: const EdgeInsets.all(12),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
@@ -780,7 +780,6 @@ class _PatientTile extends StatelessWidget {
   const _PatientTile({
     required this.name,
     required this.lastMessage,
-    this.blue,
     this.onViewDetails,
     this.onOpenChat,
     this.unreadCount = 0,
@@ -821,7 +820,7 @@ class _PatientTile extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: colorScheme.surfaceVariant,
+                  backgroundColor: colorScheme.surfaceContainerHighest,
                   child: Icon(Icons.person, color: colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(width: 14),
@@ -919,7 +918,7 @@ class _AiConversationTile extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: colorScheme.surfaceVariant,
+                  backgroundColor: colorScheme.surfaceContainerHighest,
                   child: Icon(Icons.smart_toy_outlined, color: colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(width: 14),
@@ -1089,7 +1088,7 @@ class _AiSummaryTile extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: colorScheme.surfaceVariant,
+                  backgroundColor: colorScheme.surfaceContainerHighest,
                   child: Icon(Icons.notes_rounded, color: colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(width: 14),
@@ -1141,7 +1140,7 @@ class _UnreadBadge extends StatelessWidget {
 class _InviteTile extends StatelessWidget {
   final InvitationCode invitation;
   final VoidCallback? onDelete;
-  const _InviteTile({required this.invitation, this.onDelete});
+  const _InviteTile({required this.invitation});
 
   String _remainingText(DateTime now, DateTime expiry) {
     final diff = expiry.difference(now);
@@ -1176,7 +1175,7 @@ class _InviteTile extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 22,
-              backgroundColor: theme.colorScheme.surfaceVariant,
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
               child: Icon(Icons.mail_outline, color: theme.colorScheme.onSurfaceVariant),
             ),
             const SizedBox(width: 12),

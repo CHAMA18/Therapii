@@ -595,7 +595,7 @@ class _TherapistApprovalsPageState extends State<TherapistApprovalsPage> with Si
     if (rawEntries is Iterable) {
       for (final item in rawEntries) {
         if (item is Map) {
-          final map = Map<String, dynamic>.from(item as Map);
+          final map = Map<String, dynamic>.from(item);
           final summary = _formatEducationMap(map);
           if (summary.trim().isNotEmpty) entries.add(summary);
         }

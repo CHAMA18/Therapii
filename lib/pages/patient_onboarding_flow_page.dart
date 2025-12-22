@@ -185,7 +185,7 @@ class _PatientOnboardingFlowPageState extends State<PatientOnboardingFlowPage> {
           child: LinearProgressIndicator(
             value: _progress,
             minHeight: 8,
-            backgroundColor: theme.colorScheme.surfaceVariant.withOpacity(0.4),
+            backgroundColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.4),
             valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
           ),
         ),
@@ -241,7 +241,7 @@ class _PatientOnboardingFlowPageState extends State<PatientOnboardingFlowPage> {
           subtitle: 'Preferences help both your therapist and the AI respond in ways that feel useful.',
           children: [
             DropdownButtonFormField<String>(
-              value: _checkInFrequency,
+              initialValue: _checkInFrequency,
               items: const [
                 'Daily check-ins',
                 'A few times a week',

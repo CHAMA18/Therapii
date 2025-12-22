@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:therapii/pages/auth_welcome_page.dart';
-import 'package:therapii/theme.dart';
 
 class WhatIsTherapiiPage extends StatelessWidget {
   const WhatIsTherapiiPage({super.key});

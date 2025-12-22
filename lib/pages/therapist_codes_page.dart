@@ -343,7 +343,7 @@ class _AnimatedCodeCard extends StatelessWidget {
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
-                      color: scheme.surfaceVariant.withOpacity(0.18),
+                      color: scheme.surfaceContainerHighest.withOpacity(0.18),
                     ),
                     child: Row(
                       children: [

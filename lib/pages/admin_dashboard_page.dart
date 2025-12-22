@@ -310,7 +310,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                greeting() + ',',
+                                '${greeting()},',
                                 style: theme.textTheme.headlineMedium?.copyWith(
                                   color: theme.colorScheme.onSurface,
                                   fontWeight: FontWeight.w400,
@@ -723,7 +723,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     if (rawEntries is Iterable) {
       for (final item in rawEntries) {
         if (item is Map) {
-          final map = Map<String, dynamic>.from(item as Map);
+          final map = Map<String, dynamic>.from(item);
           final summary = _formatEducationMap(map);
           if (summary.trim().isNotEmpty) entries.add(summary);
         }

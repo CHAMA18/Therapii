@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:therapii/auth/firebase_auth_manager.dart';
 import 'package:therapii/models/user.dart' as app_models;
 import 'package:therapii/services/user_service.dart';
-import 'package:therapii/theme.dart';
 import 'package:therapii/widgets/primary_button.dart';
 
 class EditProfilePage extends StatefulWidget {

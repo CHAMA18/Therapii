@@ -495,7 +495,7 @@ class _QuickLinkButton extends StatelessWidget {
       style: FilledButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         foregroundColor: scheme.onSurface,
-        backgroundColor: scheme.surfaceVariant.withOpacity(0.6),
+        backgroundColor: scheme.surfaceContainerHighest.withOpacity(0.6),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
@@ -521,7 +521,7 @@ class _MessagePreview extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isTherapist ? scheme.primary.withOpacity(0.08) : scheme.surfaceVariant.withOpacity(0.6),
+        color: isTherapist ? scheme.primary.withOpacity(0.08) : scheme.surfaceContainerHighest.withOpacity(0.6),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
@@ -573,7 +573,7 @@ class _ConversationCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: scheme.surfaceVariant.withOpacity(0.5),
+          color: scheme.surfaceContainerHighest.withOpacity(0.5),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: scheme.outline.withOpacity(0.1)),
         ),
@@ -628,7 +628,7 @@ class _VoiceCheckinCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: scheme.surfaceVariant.withOpacity(0.5),
+        color: scheme.surfaceContainerHighest.withOpacity(0.5),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: scheme.outline.withOpacity(0.1)),
       ),

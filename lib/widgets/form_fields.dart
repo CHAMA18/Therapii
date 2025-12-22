@@ -91,7 +91,7 @@ class TermsCheckbox extends StatelessWidget {
       title: RichText(
         text: TextSpan(
           children: [
-            TextSpan(text: label + ' ', style: textStyle),
+            TextSpan(text: '$label ', style: textStyle),
             TextSpan(
               text: underlined,
               style: textStyle?.copyWith(

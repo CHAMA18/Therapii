@@ -4,7 +4,6 @@ import 'package:therapii/firebase_options.dart';
 import 'package:therapii/theme.dart';
 import 'package:therapii/theme_mode_controller.dart';
 import 'package:therapii/pages/auth_welcome_page.dart';
-import 'package:therapii/pages/what_is_therapii_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

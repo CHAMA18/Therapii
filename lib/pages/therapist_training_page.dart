@@ -323,7 +323,7 @@ class _TherapistTrainingPageState extends State<TherapistTrainingPage> {
       final seen = <String>{};
       for (final item in raw) {
         if (item is Map) {
-          final map = Map<String, dynamic>.from(item as Map);
+          final map = Map<String, dynamic>.from(item);
           final qualification = _normalizeString(map['qualification']);
           final institution = _normalizeString(map['institution'] ?? map['university']);
           final yearRaw = map['year_completed'];

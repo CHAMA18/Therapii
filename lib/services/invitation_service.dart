@@ -130,7 +130,7 @@ class InvitationService {
         if (snapshot.docs.isNotEmpty) {
           final docs = snapshot.docs
               .map((doc) => doc.data())
-              .where((data) => data is Map<String, dynamic>)
+              .whereType<Map<String, dynamic>>()
               .cast<Map<String, dynamic>>()
               .toList();
 
@@ -337,6 +337,7 @@ class InvitationService {
     } catch (e) {
       throw Exception('Failed to validate code: $e');
     }
+    return null;
   }
 
   // Preview a code without consuming it (for pre-auth verification and prefill)

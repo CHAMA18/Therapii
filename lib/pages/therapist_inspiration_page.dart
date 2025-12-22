@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:therapii/pages/therapist_training_page.dart';
+import 'package:therapii/pages/my_patients_page.dart';
 import 'package:therapii/widgets/primary_button.dart';
 
 class TherapistInspirationPage extends StatefulWidget {
@@ -148,8 +148,9 @@ class _TherapistInspirationPageState extends State<TherapistInspirationPage> {
       );
 
       if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const TherapistTrainingPage()),
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const MyPatientsPage()),
+        (route) => false,
       );
     } on FirebaseException catch (e) {
       if (!mounted) return;

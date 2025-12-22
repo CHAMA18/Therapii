@@ -1,5 +1,4 @@
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:therapii/models/ai_conversation_summary.dart';
 import 'package:therapii/services/ai_conversation_service.dart';

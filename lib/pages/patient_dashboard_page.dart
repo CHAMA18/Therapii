@@ -476,7 +476,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            greeting + ',',
+                            '$greeting,',
                             style: theme.textTheme.headlineMedium?.copyWith(
                               color: theme.colorScheme.onSurface,
                               fontWeight: FontWeight.w400,

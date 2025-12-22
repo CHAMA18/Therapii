@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as FirebaseAuth;
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:therapii/auth/auth_manager.dart';
 import 'package:therapii/models/user.dart' as AppUser;
 import 'package:therapii/services/user_service.dart';
