@@ -22,7 +22,9 @@ class InvitationService {
     required String patientEmail,
     required String patientFirstName,
     String patientLastName = '',
+    Map<String, dynamic>? patientBackground,
   }) async {
+    String? emailWarning;
     try {
       final callable =
           _functions.httpsCallable('createInvitationAndSendEmail');
@@ -31,11 +33,13 @@ class InvitationService {
         'patientEmail': patientEmail,
         'patientFirstName': patientFirstName,
         'patientLastName': patientLastName,
+        'patientBackground': patientBackground,
       });
 
       final sanitized = _normalizeDynamicMap(result.data);
       final invitationId = sanitized['invitationId'] ?? sanitized['invitation_id'];
       final emailSent = sanitized['emailSent'] == true || sanitized['email_sent'] == true;
+      emailWarning = sanitized['emailWarning']?.toString() ?? sanitized['email_warning']?.toString();
 
       // Prefer the function's payload and avoid direct Firestore access to comply
       // with restrictive security rules on client SDK.
@@ -56,7 +60,7 @@ class InvitationService {
         normalizedInvitation.putIfAbsent('patientLastName', () => patientLastName);
         normalizedInvitation.putIfAbsent('patient_last_name', () => patientLastName);
         final inv = InvitationCode.fromJson(normalizedInvitation);
-        return CreateInvitationResult(invitation: inv, emailSent: emailSent);
+        return CreateInvitationResult(invitation: inv, emailSent: emailSent, emailWarning: emailWarning);
       }
 
       // If the function didn't return the invitation payload, fail fast with a
@@ -73,8 +77,9 @@ class InvitationService {
           patientEmail: patientEmail,
           patientFirstName: patientFirstName,
           patientLastName: patientLastName,
+          patientBackground: patientBackground,
         );
-        return CreateInvitationResult(invitation: inv, emailSent: false);
+        return CreateInvitationResult(invitation: inv, emailSent: false, emailWarning: emailWarning);
       }
 
       final message = e.message?.isNotEmpty == true
@@ -188,6 +193,7 @@ class InvitationService {
     required String patientEmail,
     required String patientFirstName,
     String patientLastName = '',
+    Map<String, dynamic>? patientBackground,
   }) async {
     final code = await _generateUniqueCode();
     final now = DateTime.now();
@@ -201,6 +207,7 @@ class InvitationService {
       'patient_email': patientEmail,
       'patient_first_name': patientFirstName,
       'patient_last_name': patientLastName,
+      if (patientBackground != null && patientBackground.isNotEmpty) 'patient_background': patientBackground,
       'is_used': false,
       'created_at': Timestamp.fromDate(now),
       'expires_at': Timestamp.fromDate(expiresAt),
@@ -593,7 +600,8 @@ class InvitationService {
 class CreateInvitationResult {
   final InvitationCode invitation;
   final bool emailSent;
-  const CreateInvitationResult({required this.invitation, required this.emailSent});
+  final String? emailWarning;
+  const CreateInvitationResult({required this.invitation, required this.emailSent, this.emailWarning});
 }
 
 Map<String, dynamic> _normalizeDynamicMap(dynamic value) {

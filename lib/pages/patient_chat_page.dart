@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:therapii/auth/firebase_auth_manager.dart';
 import 'package:therapii/models/chat_message.dart';
 import 'package:therapii/models/user.dart' as app_user;
@@ -19,15 +21,20 @@ class _PatientChatPageState extends State<PatientChatPage> {
   final UserService _userService = UserService();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final stt.SpeechToText _speechToText = stt.SpeechToText();
 
   app_user.User? _viewer;
   bool _loading = true;
   bool _sending = false;
   String? _error;
+  bool _speechAvailable = false;
+  bool _isListening = false;
+  String _dictationText = '';
 
   @override
   void initState() {
     super.initState();
+    _initSpeech();
     _loadViewer();
   }
 
@@ -35,6 +42,7 @@ class _PatientChatPageState extends State<PatientChatPage> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    _speechToText.stop();
     super.dispose();
   }
 
@@ -95,13 +103,13 @@ class _PatientChatPageState extends State<PatientChatPage> {
     return user.email;
   }
 
-  Future<void> _handleSend() async {
+  Future<void> _handleSend({String? textOverride}) async {
     final viewer = _viewer;
     final therapistId = _therapistId;
     final patientId = _patientId;
 
     if (viewer == null || therapistId == null || patientId == null) return;
-    final text = _messageController.text.trim();
+    final text = (textOverride ?? _messageController.text).trim();
     if (text.isEmpty) return;
 
     FocusScope.of(context).unfocus();
@@ -115,7 +123,11 @@ class _PatientChatPageState extends State<PatientChatPage> {
         senderIsTherapist: viewer.isTherapist,
       );
       if (!mounted) return;
-      _messageController.clear();
+      if (textOverride == null) {
+        _messageController.clear();
+      } else {
+        setState(() => _dictationText = '');
+      }
       await _markConversationRead();
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     } catch (e) {
@@ -148,6 +160,91 @@ class _PatientChatPageState extends State<PatientChatPage> {
       _scrollController.position.maxScrollExtent,
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
+    );
+  }
+
+  Future<void> _initSpeech() async {
+    if (kIsWeb) {
+      if (mounted) {
+        setState(() => _speechAvailable = false);
+      }
+      return;
+    }
+
+    try {
+      final available = await _speechToText.initialize(
+        onError: (error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Speech recognition error: ${error.errorMsg}')),
+            );
+          }
+        },
+        onStatus: (status) {
+          if (mounted && status == 'done') {
+            setState(() => _isListening = false);
+          }
+        },
+      );
+      if (mounted) {
+        setState(() => _speechAvailable = available);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _speechAvailable = false);
+      }
+    }
+  }
+
+  Future<void> _toggleListening() async {
+    if (kIsWeb) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Voice input is not available on web in this build.')),
+        );
+      }
+      return;
+    }
+
+    if (_isListening) {
+      await _speechToText.stop();
+      if (mounted) {
+        setState(() => _isListening = false);
+      }
+      return;
+    }
+
+    final available = _speechAvailable || await _speechToText.initialize();
+    if (!available) {
+      if (mounted) {
+        setState(() => _speechAvailable = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Speech recognition not available on this device.')),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _isListening = true;
+      _speechAvailable = true;
+      _dictationText = '';
+    });
+
+    await _speechToText.listen(
+      onResult: (result) {
+        if (!mounted) return;
+        setState(() => _dictationText = result.recognizedWords);
+        if (result.finalResult && result.recognizedWords.trim().isNotEmpty) {
+          _handleSend(textOverride: result.recognizedWords);
+          _speechToText.stop();
+          setState(() => _isListening = false);
+        }
+      },
+      listenFor: const Duration(seconds: 45),
+      pauseFor: const Duration(seconds: 3),
+      partialResults: true,
+      cancelOnError: true,
     );
   }
 
@@ -270,6 +367,20 @@ class _PatientChatPageState extends State<PatientChatPage> {
                             controller: _messageController,
                             onSend: _handleSend,
                             sending: _sending,
+                          ),
+                          _VoiceComposer(
+                            isListening: _isListening,
+                            speechAvailable: _speechAvailable,
+                            transcript: _dictationText,
+                            onToggleListening: _toggleListening,
+                            onSendTranscript: _dictationText.trim().isEmpty || _sending
+                                ? null
+                                : () => _handleSend(textOverride: _dictationText),
+                            onClearTranscript: _dictationText.isEmpty
+                                ? null
+                                : () {
+                                    setState(() => _dictationText = '');
+                                  },
                           ),
                         ],
                       ),
@@ -447,6 +558,132 @@ class _ChatComposerState extends State<_ChatComposer> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _VoiceComposer extends StatelessWidget {
+  final bool isListening;
+  final bool speechAvailable;
+  final String transcript;
+  final VoidCallback? onToggleListening;
+  final VoidCallback? onSendTranscript;
+  final VoidCallback? onClearTranscript;
+
+  const _VoiceComposer({
+    required this.isListening,
+    required this.speechAvailable,
+    required this.transcript,
+    required this.onToggleListening,
+    required this.onSendTranscript,
+    required this.onClearTranscript,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final text = transcript.trim();
+    final unavailable = !speechAvailable && !isListening;
+    final subtitle = unavailable
+        ? 'Voice input is not available on this device.'
+        : text.isNotEmpty
+            ? text
+            : isListening
+                ? 'Listening… share what you would like to send.'
+                : 'Tap the mic to dictate and send as a message.';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: scheme.outline.withOpacity(0.12)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: isListening ? scheme.primary.withOpacity(0.14) : scheme.secondaryContainer,
+                  child: Icon(
+                    isListening ? Icons.mic : Icons.mic_none,
+                    color: isListening ? scheme.primary : scheme.onSecondaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Dictate a message',
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurface.withOpacity(0.65)),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: unavailable ? null : onToggleListening,
+                  icon: Icon(isListening ? Icons.stop_rounded : Icons.mic_none),
+                  label: Text(isListening ? 'Stop' : 'Dictate'),
+                ),
+              ],
+            ),
+            if (text.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceVariant.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  text,
+                  style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: onClearTranscript,
+                    icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                    label: const Text('Clear'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: onSendTranscript,
+                    icon: const Icon(Icons.send_rounded, size: 18),
+                    label: const Text('Send transcript'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

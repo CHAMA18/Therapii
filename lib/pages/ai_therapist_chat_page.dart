@@ -10,6 +10,7 @@ import 'package:therapii/openai/openai_config.dart';
 import 'package:therapii/services/ai_conversation_service.dart';
 import 'package:therapii/models/ai_conversation_summary.dart';
 import 'package:therapii/services/user_service.dart';
+import 'package:therapii/pages/patient_ai_history_page.dart';
 
 class AiTherapistChatPage extends StatefulWidget {
   /// The therapist ID whose AI model the patient will chat with.
@@ -144,9 +145,9 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
       .map((entry) => _DisplayedAiMessage(role: entry.role, text: entry.content))
       .toList(growable: false);
 
-  Future<void> _handleSend() async {
+  Future<void> _handleSend({String? textOverride}) async {
     if (_sending) return;
-    final text = _messageController.text.trim();
+    final text = (textOverride ?? _messageController.text).trim();
     if (text.isEmpty) return;
 
     await _responseSubscription?.cancel();
@@ -253,6 +254,12 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
     );
   }
 
+  void _openHistory() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PatientAiHistoryPage()),
+    );
+  }
+
   Future<void> _loadPatientContext() async {
     final firebaseUser = firebase_auth.FirebaseAuth.instance.currentUser;
     if (firebaseUser == null) {
@@ -263,7 +270,7 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
           AiChatMessage(
             role: 'assistant',
             content:
-                'Hi, I\'m $_aiName, your Therapii AI companion. I\'m here whenever you need to check in, reflect, or plan your next steps. What\'s on your mind right now?',
+                'Hi, I am $_aiName, your Therapii AI companion. I\'m here whenever you need to check in, reflect, or plan your next steps. What\'s on your mind right now?',
           ),
         ];
       });
@@ -286,7 +293,7 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
           AiChatMessage(
             role: 'assistant',
             content:
-                'Hi, I\'m $_aiName, your Therapii AI companion. I\'m here whenever you need to check in, reflect, or plan your next steps. What\'s on your mind right now?',
+                'Hi, I am $_aiName, your Therapii AI companion. I\'m here whenever you need to check in, reflect, or plan your next steps. What\'s on your mind right now?',
           ),
         ];
       });
@@ -299,7 +306,7 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
           AiChatMessage(
             role: 'assistant',
             content:
-                'Hi, I\'m $_aiName, your Therapii AI companion. I\'m here whenever you need to check in, reflect, or plan your next steps. What\'s on your mind right now?',
+                'Hi, I am $_aiName, your Therapii AI companion. I\'m here whenever you need to check in, reflect, or plan your next steps. What\'s on your mind right now?',
           ),
         ];
       });
@@ -475,6 +482,11 @@ class _AiTherapistChatPageState extends State<AiTherapistChatPage> {
         title: Text('Chat with $_aiName'),
         centerTitle: true,
         actions: [
+          IconButton(
+            tooltip: 'History',
+            icon: const Icon(Icons.history_rounded),
+            onPressed: _openHistory,
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: TextButton.icon(
@@ -693,6 +705,9 @@ extension _SpeechActions on _AiTherapistChatPageState {
             setState(() {
               _messageController.text = result.recognizedWords;
             });
+            if (result.finalResult && result.recognizedWords.trim().isNotEmpty) {
+              _handleSend(textOverride: result.recognizedWords);
+            }
           }
         },
         listenFor: const Duration(seconds: 30),

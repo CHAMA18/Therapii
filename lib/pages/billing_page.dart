@@ -898,7 +898,12 @@ class _PaymentMethodCard extends StatelessWidget {
   final bool isPaidUser;
   final bool isLoading;
   final VoidCallback onUpdate;
-  const _PaymentMethodCard({this.isPaidUser = false, required this.onUpdate});
+  const _PaymentMethodCard({
+    this.paymentMethod,
+    this.isPaidUser = false,
+    this.isLoading = false,
+    required this.onUpdate,
+  });
 
   @override
   Widget build(BuildContext context) {

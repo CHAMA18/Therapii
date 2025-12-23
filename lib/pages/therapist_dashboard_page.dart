@@ -7,11 +7,6 @@ import 'package:therapii/widgets/common_settings_drawer.dart';
 import 'package:therapii/widgets/dashboard_action_card.dart';
 import 'package:therapii/pages/my_patients_page.dart';
 import 'package:therapii/pages/listen_page.dart';
-import 'package:therapii/pages/therapist_details_page.dart';
-import 'package:therapii/pages/therapist_practice_personalization_page.dart';
-import 'package:therapii/pages/therapist_therapeutic_models_page.dart';
-import 'package:therapii/pages/support_center_page.dart';
-import 'package:therapii/pages/billing_page.dart';
 
 class TherapistDashboardPage extends StatefulWidget {
   const TherapistDashboardPage({super.key});
@@ -111,7 +106,7 @@ class _TherapistDashboardPageState extends State<TherapistDashboardPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _greeting() + ',',
+                              '${_greeting()},',
                               style: theme.textTheme.headlineMedium?.copyWith(
                                 color: theme.colorScheme.onSurface,
                                 fontWeight: FontWeight.w400,
@@ -213,114 +208,6 @@ class _TherapistDashboardPageState extends State<TherapistDashboardPage> {
                           ),
                         ],
 
-                        SizedBox(height: gap),
-                        // Row 2
-                        if (isWide)
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: DashboardActionCard(
-                                  title: 'Practice Setup',
-                                  subtitle: 'Contact & Licensure, Education, ID verification',
-                                  icon: Icons.badge_outlined,
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const TherapistDetailsPage()),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: gap),
-                              Expanded(
-                                child: DashboardActionCard(
-                                  title: 'Personalization',
-                                  subtitle: 'Tone, phrases, engagement & concerns',
-                                  icon: Icons.tune_rounded,
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const TherapistPracticePersonalizationPage()),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        else ...[
-                          DashboardActionCard(
-                            title: 'Practice Setup',
-                            subtitle: 'Contact & Licensure, Education, ID verification',
-                            icon: Icons.badge_outlined,
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const TherapistDetailsPage()),
-                            ),
-                          ),
-                          SizedBox(height: gap),
-                          DashboardActionCard(
-                            title: 'Personalization',
-                            subtitle: 'Tone, phrases, engagement & concerns',
-                            icon: Icons.tune_rounded,
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const TherapistPracticePersonalizationPage()),
-                            ),
-                          ),
-                        ],
-
-                        SizedBox(height: gap),
-                        // Row 3
-                        if (isWide)
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: DashboardActionCard(
-                                  title: 'Therapeutic Models',
-                                  subtitle: 'Core approaches for your practice',
-                                  icon: Icons.psychology_alt_outlined,
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const TherapistTherapeuticModelsPage()),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(width: gap),
-                              Expanded(
-                                child: DashboardActionCard(
-                                  title: 'Billing',
-                                  subtitle: 'Manage subscription and invoices',
-                                  icon: Icons.credit_card_rounded,
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const BillingPage()),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        else ...[
-                          DashboardActionCard(
-                            title: 'Therapeutic Models',
-                            subtitle: 'Core approaches for your practice',
-                            icon: Icons.psychology_alt_outlined,
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const TherapistTherapeuticModelsPage()),
-                            ),
-                          ),
-                          SizedBox(height: gap),
-                          DashboardActionCard(
-                            title: 'Billing',
-                            subtitle: 'Manage subscription and invoices',
-                            icon: Icons.credit_card_rounded,
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const BillingPage()),
-                            ),
-                          ),
-                        ],
-
-                        SizedBox(height: gap),
-                        // Row 4
-                        DashboardActionCard(
-                          title: 'Support Center',
-                          subtitle: 'FAQs and help resources',
-                          icon: Icons.help_center_rounded,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const SupportCenterPage()),
-                          ),
-                        ),
                       ];
 
                   return Column(children: columnChildren());

@@ -13,6 +13,9 @@ class _TherapistApprovalsPageState extends State<TherapistApprovalsPage> with Si
   late final TabController _tabController;
   String _filter = 'all';
   final List<String> _filters = ['all', 'pending', 'approved', 'rejected'];
+  final TextEditingController _searchController = TextEditingController();
+  String _sortMode = 'newest';
+  bool _licensureOnly = false;
 
   @override
   void initState() {
@@ -29,6 +32,7 @@ class _TherapistApprovalsPageState extends State<TherapistApprovalsPage> with Si
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -404,6 +408,69 @@ class _TherapistApprovalsPageState extends State<TherapistApprovalsPage> with Si
 
             const SizedBox(height: 16),
 
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: _searchController,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.search),
+                      hintText: 'Search name, email, practice, or state',
+                      filled: true,
+                      fillColor: colorScheme.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: colorScheme.outline.withValues(alpha: 0.25)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: colorScheme.outline.withValues(alpha: 0.25)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _sortMode,
+                          items: const [
+                            DropdownMenuItem(value: 'newest', child: Text('Newest')),
+                            DropdownMenuItem(value: 'oldest', child: Text('Oldest')),
+                            DropdownMenuItem(value: 'name', child: Text('Name A-Z')),
+                          ],
+                          onChanged: (val) => setState(() => _sortMode = val ?? 'newest'),
+                          decoration: InputDecoration(
+                            labelText: 'Sort by',
+                            filled: true,
+                            fillColor: colorScheme.surface,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: colorScheme.outline.withValues(alpha: 0.25)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: colorScheme.outline.withValues(alpha: 0.25)),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      FilterChip(
+                        label: const Text('Has licensure'),
+                        selected: _licensureOnly,
+                        onSelected: (v) => setState(() => _licensureOnly = v),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
             // Content
             Expanded(
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -417,20 +484,40 @@ class _TherapistApprovalsPageState extends State<TherapistApprovalsPage> with Si
                   }
 
                   final docs = snapshot.data?.docs ?? [];
+                  final query = _searchController.text.trim().toLowerCase();
                   final filtered = docs.where((doc) {
                     final status = (doc.data()['approval_status'] as String?)?.toLowerCase();
+                    final data = doc.data();
+                    final hasLicensure = (data['state_licensures'] is List && (data['state_licensures'] as List).isNotEmpty);
+                    if (_licensureOnly && !hasLicensure) return false;
                     if (_filter == 'all') return true;
                     if (_filter == 'pending') {
                       return status == null || status == 'pending' || status == 'resubmitted' || status == 'needs_review';
                     }
                     return status == _filter;
+                  }).where((doc) {
+                    if (query.isEmpty) return true;
+                    final data = doc.data();
+                    final fields = [
+                      data['full_name'],
+                      data['contact_email'],
+                      data['practice_name'],
+                      ...(List<String>.from(data['state_licensures'] ?? const <String>[])),
+                    ];
+                    return fields.any((f) => (f ?? '').toString().toLowerCase().contains(query));
                   }).toList()
                     ..sort((a, b) {
+                      if (_sortMode == 'name') {
+                        final aName = (a.data()['full_name'] ?? '').toString().toLowerCase();
+                        final bName = (b.data()['full_name'] ?? '').toString().toLowerCase();
+                        return aName.compareTo(bName);
+                      }
                       final aTs = a.data()['approval_requested_at'] as Timestamp? ?? a.data()['created_at'] as Timestamp?;
                       final bTs = b.data()['approval_requested_at'] as Timestamp? ?? b.data()['created_at'] as Timestamp?;
                       final aDate = aTs?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
                       final bDate = bTs?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
-                      return bDate.compareTo(aDate);
+                      final cmp = bDate.compareTo(aDate);
+                      return _sortMode == 'oldest' ? -cmp : cmp;
                     });
 
                   if (filtered.isEmpty) {

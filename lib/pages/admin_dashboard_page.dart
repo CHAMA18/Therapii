@@ -4,10 +4,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:therapii/auth/firebase_auth_manager.dart';
+import 'package:therapii/pages/admin_ai_chats_page.dart';
+import 'package:therapii/pages/admin_sessions_page.dart';
 import 'package:therapii/pages/admin_settings_page.dart';
 import 'package:therapii/pages/auth_welcome_page.dart';
 import 'package:therapii/pages/therapist_approvals_page.dart';
-import 'package:therapii/theme.dart';
 import 'package:therapii/utils/admin_access.dart';
 import 'package:therapii/widgets/app_drawer.dart';
 import 'package:therapii/widgets/dashboard_action_card.dart';
@@ -302,10 +303,13 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   // Header (mirrors patient dashboard style)
                   Padding(
                     padding: const EdgeInsets.only(top: 12, bottom: 36),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Expanded(
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 620),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -392,7 +396,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                   : '$_humanConversationCount total sessions',
                               icon: Icons.forum_outlined,
                               isSecondary: true,
-                              onTap: _loadCounts,
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const AdminSessionsPage()),
+                              ),
                             ),
                             const SizedBox(height: 20),
                             DashboardActionCard(
@@ -401,7 +407,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                   ? 'Loading...'
                                   : '$_aiConversationCount assistant chats',
                               icon: Icons.smart_toy_outlined,
-                              onTap: _loadCounts,
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const AdminAiChatsPage()),
+                              ),
                             ),
                           ],
                         );
@@ -448,7 +456,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                       : '$_humanConversationCount total sessions',
                                   icon: Icons.forum_outlined,
                                   isSecondary: true,
-                                  onTap: _loadCounts,
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => const AdminSessionsPage()),
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 24),
@@ -458,7 +468,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                   subtitle:
                                       _loadingCounts ? 'Loading...' : '$_aiConversationCount assistant chats',
                                   icon: Icons.smart_toy_outlined,
-                                  onTap: _loadCounts,
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => const AdminAiChatsPage()),
+                                  ),
                                 ),
                               ),
                             ],

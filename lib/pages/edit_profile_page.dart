@@ -6,6 +6,8 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:therapii/auth/firebase_auth_manager.dart';
 import 'package:therapii/models/user.dart' as app_models;
+import 'package:therapii/pages/patient_dashboard_page.dart';
+import 'package:therapii/pages/therapist_dashboard_page.dart';
 import 'package:therapii/services/user_service.dart';
 import 'package:therapii/widgets/primary_button.dart';
 
@@ -285,8 +287,20 @@ class _EditProfilePageState extends State<EditProfilePage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final user = firebase_auth.FirebaseAuth.instance.currentUser;
     final emailMasked = _maskEmail(user?.email);
+    final isTherapist = _profile?.isTherapist ?? false;
+    final inputFill = isDark ? scheme.surfaceContainerHighest.withValues(alpha: 0.6) : const Color(0xFFF0F4F8);
+    final inputBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: scheme.outline.withValues(alpha: isDark ? 0.35 : 0.2)),
+    );
+    final inputFocusedBorder = inputBorder.copyWith(
+      borderSide: BorderSide(color: scheme.primary, width: 1.5),
+    );
+    final inputTextStyle = TextStyle(color: scheme.onSurface);
+    final inputHintStyle = TextStyle(color: scheme.onSurfaceVariant.withValues(alpha: 0.9));
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -299,8 +313,21 @@ class _EditProfilePageState extends State<EditProfilePage> {
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.home_outlined, color: Colors.white),
+            tooltip: 'Home',
+            onPressed: () {
+              final destination = isTherapist ? const TherapistDashboardPage() : const PatientDashboardPage();
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => destination),
+                (route) => false,
+              );
+            },
+          ),
+        ],
       ),
-      backgroundColor: const Color(0xFFF7F8FA),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
         child: Column(
@@ -327,14 +354,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       TextFormField(
                         controller: _newEmailCtrl,
                         keyboardType: TextInputType.emailAddress,
+                        style: inputTextStyle,
                         decoration: InputDecoration(
                           labelText: 'New email',
+                          labelStyle: TextStyle(color: scheme.onSurface.withValues(alpha: 0.9)),
+                          hintStyle: inputHintStyle,
                           prefixIcon: Icon(Icons.email_outlined, color: scheme.primary),
                           filled: true,
-                          fillColor: const Color(0xFFF0F4F8),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: scheme.primary, width: 1.5)),
+                          fillColor: inputFill,
+                          border: inputBorder,
+                          enabledBorder: inputBorder,
+                          focusedBorder: inputFocusedBorder,
                         ),
                         validator: (v) {
                           final value = (v ?? '').trim();
@@ -347,14 +377,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       TextFormField(
                         controller: _currentPassForEmailCtrl,
                         obscureText: !_showCurrentPassForEmail,
+                        style: inputTextStyle,
                         decoration: InputDecoration(
                           labelText: 'Current password (for verification)',
+                          labelStyle: TextStyle(color: scheme.onSurface.withValues(alpha: 0.9)),
+                          hintStyle: inputHintStyle,
                           prefixIcon: Icon(Icons.lock_outline, color: scheme.primary),
                           filled: true,
-                          fillColor: const Color(0xFFF0F4F8),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: scheme.primary, width: 1.5)),
+                          fillColor: inputFill,
+                          border: inputBorder,
+                          enabledBorder: inputBorder,
+                          focusedBorder: inputFocusedBorder,
                           suffixIcon: IconButton(
                             icon: Icon(_showCurrentPassForEmail ? Icons.visibility_off : Icons.visibility, color: scheme.primary),
                             onPressed: () => setState(() => _showCurrentPassForEmail = !_showCurrentPassForEmail),
@@ -397,14 +430,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       TextFormField(
                         controller: _currentPassCtrl,
                         obscureText: !_showCurrentPass,
+                        style: inputTextStyle,
                         decoration: InputDecoration(
                           labelText: 'Current password',
+                          labelStyle: TextStyle(color: scheme.onSurface.withValues(alpha: 0.9)),
+                          hintStyle: inputHintStyle,
                           prefixIcon: Icon(Icons.lock_outline, color: scheme.primary),
                           filled: true,
-                          fillColor: const Color(0xFFF0F4F8),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: scheme.primary, width: 1.5)),
+                          fillColor: inputFill,
+                          border: inputBorder,
+                          enabledBorder: inputBorder,
+                          focusedBorder: inputFocusedBorder,
                           suffixIcon: IconButton(
                             icon: Icon(_showCurrentPass ? Icons.visibility_off : Icons.visibility, color: scheme.primary),
                             onPressed: () => setState(() => _showCurrentPass = !_showCurrentPass),
@@ -416,14 +452,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       TextFormField(
                         controller: _newPassCtrl,
                         obscureText: !_showNewPass,
+                        style: inputTextStyle,
                         decoration: InputDecoration(
                           labelText: 'New password',
+                          labelStyle: TextStyle(color: scheme.onSurface.withValues(alpha: 0.9)),
+                          hintStyle: inputHintStyle,
                           prefixIcon: Icon(Icons.lock, color: scheme.primary),
                           filled: true,
-                          fillColor: const Color(0xFFF0F4F8),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: scheme.primary, width: 1.5)),
+                          fillColor: inputFill,
+                          border: inputBorder,
+                          enabledBorder: inputBorder,
+                          focusedBorder: inputFocusedBorder,
                           suffixIcon: IconButton(
                             icon: Icon(_showNewPass ? Icons.visibility_off : Icons.visibility, color: scheme.primary),
                             onPressed: () => setState(() => _showNewPass = !_showNewPass),
@@ -444,14 +483,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       TextFormField(
                         controller: _confirmPassCtrl,
                         obscureText: !_showConfirmPass,
+                        style: inputTextStyle,
                         decoration: InputDecoration(
                           labelText: 'Confirm new password',
+                          labelStyle: TextStyle(color: scheme.onSurface.withValues(alpha: 0.9)),
+                          hintStyle: inputHintStyle,
                           prefixIcon: Icon(Icons.lock, color: scheme.primary),
                           filled: true,
-                          fillColor: const Color(0xFFF0F4F8),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: scheme.primary, width: 1.5)),
+                          fillColor: inputFill,
+                          border: inputBorder,
+                          enabledBorder: inputBorder,
+                          focusedBorder: inputFocusedBorder,
                           suffixIcon: IconButton(
                             icon: Icon(_showConfirmPass ? Icons.visibility_off : Icons.visibility, color: scheme.primary),
                             onPressed: () => setState(() => _showConfirmPass = !_showConfirmPass),
@@ -874,16 +916,17 @@ class _SectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+        border: Border.all(color: scheme.outline.withValues(alpha: isDark ? 0.3 : 0.08)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.04),
+            blurRadius: isDark ? 18 : 12,
+            offset: const Offset(0, 6),
           ),
         ],
       ),

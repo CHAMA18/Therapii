@@ -6,6 +6,7 @@ class NewPatientConfirmPage extends StatelessWidget {
   final String patientEmail;
   final String invitationCode;
   final bool emailSent;
+  final String? emailWarning;
 
   const NewPatientConfirmPage({
     super.key,
@@ -13,6 +14,7 @@ class NewPatientConfirmPage extends StatelessWidget {
     required this.patientEmail,
     required this.invitationCode,
     this.emailSent = false,
+    this.emailWarning,
   });
 
   @override
@@ -81,7 +83,11 @@ class NewPatientConfirmPage extends StatelessWidget {
                         Text(
                           emailSent
                               ? 'An email has been sent to $patientName at $patientEmail'
-                              : 'We could not send the email automatically. Please share the code below with $patientName at $patientEmail.',
+                              : [
+                                  'We could not send the email automatically.',
+                                  if (emailWarning != null && emailWarning!.trim().isNotEmpty) emailWarning!,
+                                  'Please share the code below manually with $patientName at $patientEmail.',
+                                ].join(' '),
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: grey),
                           textAlign: TextAlign.center,
                         ),

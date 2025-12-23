@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:therapii/auth/firebase_auth_manager.dart';
 import 'package:therapii/pages/auth_welcome_page.dart';
-import 'package:therapii/pages/listen_page.dart';
 import 'package:therapii/pages/new_patient_info_page.dart';
 import 'package:therapii/pages/therapist_details_page.dart';
 import 'package:therapii/pages/patient_chat_page.dart';
@@ -12,11 +11,9 @@ import 'package:therapii/services/user_service.dart';
 import 'package:therapii/models/invitation_code.dart';
 import 'package:therapii/models/user.dart' as AppUser;
 import 'package:therapii/widgets/shimmer_widgets.dart';
-import 'package:therapii/widgets/app_drawer.dart';
 import 'package:therapii/widgets/common_settings_drawer.dart';
 import 'package:therapii/services/chat_service.dart';
 import 'package:therapii/models/chat_conversation.dart';
-import 'package:therapii/theme_mode_controller.dart';
 import 'package:therapii/services/ai_conversation_service.dart';
 import 'package:therapii/models/ai_conversation_summary.dart';
 import 'package:therapii/pages/ai_summary_detail_page.dart';
@@ -25,7 +22,6 @@ import 'package:therapii/models/voice_checkin.dart';
 import 'package:therapii/pages/voice_checkin_detail_page.dart';
 import 'package:therapii/widgets/therapist_approval_gate.dart';
 import 'package:therapii/widgets/dashboard_action_card.dart';
-import 'package:therapii/widgets/primary_button.dart';
 
 enum TopNavSection { patients, listen }
 
@@ -43,6 +39,7 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
   final _userService = UserService();
   final _chatService = ChatService();
   final _aiService = AiConversationService();
+  final TextEditingController _aiReferralController = TextEditingController();
 
   bool _loading = true;
   String? _error;
@@ -55,6 +52,9 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
   bool _checkingApproval = false;
   bool _signingOut = false;
   AppUser.User? _therapist;
+  String? _aiReferralPatientId;
+  bool _sendingAiReferral = false;
+  String? _aiReferralStatus;
 
   String _truncate(String text, {int max = 60}) {
     if (text.length <= max) return text;
@@ -357,7 +357,19 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
   @override
   void initState() {
     super.initState();
+    _aiReferralController.addListener(_onReferralTextChanged);
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _aiReferralController.removeListener(_onReferralTextChanged);
+    _aiReferralController.dispose();
+    super.dispose();
+  }
+
+  void _onReferralTextChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _confirmAndDelete(InvitationCode inv) async {
@@ -437,6 +449,9 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
           _pendingInvites = [];
           _loading = false;
           _showAllPatients = false;
+          _aiReferralPatientId = null;
+          _aiReferralStatus = null;
+          _aiReferralController.clear();
         });
         return;
       }
@@ -454,6 +469,7 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
         _pendingInvites = pending;
         _loading = false;
         _showAllPatients = false;
+        _aiReferralPatientId ??= users.isNotEmpty ? users.first.id : null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -481,6 +497,54 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
     );
     if (!mounted) return;
     await _loadDataInternal(silentApprovalCheck: true);
+  }
+
+  Future<void> _handleShareWithAi() async {
+    final therapistId = _therapistId;
+    final patientId = _aiReferralPatientId;
+    final notes = _aiReferralController.text.trim();
+
+    if (therapistId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sign in again to share with the AI therapist.')));
+      return;
+    }
+    if (patientId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select a client to share with the AI therapist.')));
+      return;
+    }
+    if (notes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Add notes or lessons before sending.')));
+      return;
+    }
+
+    setState(() {
+      _sendingAiReferral = true;
+      _aiReferralStatus = null;
+    });
+
+    try {
+      final summaryText = 'Therapist context note (${DateTime.now().toLocal()}):\n$notes';
+      await _aiService.saveSummary(
+        patientId: patientId,
+        therapistId: therapistId,
+        summary: summaryText,
+        transcript: [AiMessagePart(role: 'therapist', text: notes)],
+      );
+      if (!mounted) return;
+      _aiReferralController.clear();
+      setState(() {
+        _sendingAiReferral = false;
+        _aiReferralStatus = 'Shared with the AI companion for this client.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Shared with AI therapist.')));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _sendingAiReferral = false;
+        _aiReferralStatus = 'Failed to share with AI. Please retry.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Unable to share with AI: $e')));
+    }
   }
 
   Future<void> _signOut() async {
@@ -518,7 +582,7 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
           tooltip: 'Back',
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('My Patients'),
+        title: const Text('My Clients'),
         centerTitle: true,
         scrolledUnderElevation: 0,
         backgroundColor: Colors.transparent,
@@ -569,32 +633,14 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '${_greeting()},',
-                                    style: theme.textTheme.headlineMedium?.copyWith(
-                                      color: theme.colorScheme.onSurface,
-                                      fontWeight: FontWeight.w400,
-                                    ),
-                                  ),
-                                  Text(
-                                    _therapist?.firstName.isNotEmpty == true
-                                        ? _therapist!.firstName
-                                        : (_therapist?.fullName.isNotEmpty == true
-                                            ? _therapist!.fullName
-                                            : 'there'),
-                                    style: theme.textTheme.displaySmall?.copyWith(
+                                    '${_greeting()}, ${_therapist?.firstName.isNotEmpty == true ? _therapist!.firstName : (_therapist?.fullName.isNotEmpty == true ? _therapist!.fullName : 'there')}',
+                                    style: theme.textTheme.headlineSmall?.copyWith(
                                       fontWeight: FontWeight.w700,
                                       color: theme.colorScheme.onSurface,
-                                      height: 1.1,
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Manage your patients, invites and conversations.',
-                                    style: theme.textTheme.bodyLarge?.copyWith(
-                                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
+                                  const SizedBox(height: 12),
+                                  // Removed helper text per request
                                 ],
                               ),
                             ),
@@ -626,7 +672,7 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
                         final isWide = constraints.maxWidth > 600;
                         final gap = isWide ? 24.0 : 20.0;
                         final inviteCard = DashboardActionCard(
-                          title: 'Invite New Patient',
+                          title: 'Invite New Client',
                           subtitle: 'Share a code to connect',
                           icon: Icons.person_add_alt_1_rounded,
                           isPrimary: true,
@@ -634,18 +680,13 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
                             MaterialPageRoute(builder: (_) => const NewPatientInfoPage()),
                           ),
                         );
-                        final listenCard = DashboardActionCard(
-                          title: 'Listen',
-                          subtitle: 'AI summaries, transcripts and voice updates',
-                          icon: Icons.graphic_eq_rounded,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const ListenPage()),
+                        return Align(
+                          alignment: Alignment.centerRight,
+                          child: SizedBox(
+                            width: isWide ? 240 : double.infinity,
+                            child: inviteCard,
                           ),
                         );
-
-                        return isWide
-                            ? Row(children: [Expanded(child: inviteCard), SizedBox(width: gap), Expanded(child: listenCard)])
-                            : Column(children: [inviteCard, SizedBox(height: gap), listenCard]);
                       }),
 
                       const SizedBox(height: 28),
@@ -673,6 +714,19 @@ class _MyPatientsPageState extends State<MyPatientsPage> {
                           onDelete: _confirmAndDelete,
                           onGenerateInvite: () => Navigator.of(context).push(
                             MaterialPageRoute(builder: (_) => const NewPatientInfoPage()),
+                          ),
+                        ),
+                      if (!_loading && (_activePatients.isNotEmpty))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 20),
+                          child: _AiReferralCard(
+                            patients: _activePatients,
+                            selectedPatientId: _aiReferralPatientId,
+                            onSelectPatient: (id) => setState(() => _aiReferralPatientId = id),
+                            controller: _aiReferralController,
+                            onSend: _handleShareWithAi,
+                            sending: _sendingAiReferral,
+                            statusText: _aiReferralStatus,
                           ),
                         ),
                       const SizedBox(height: 40),
@@ -728,12 +782,146 @@ class _TopNav extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _HeaderTab(label: 'My Patients', selected: selected == TopNavSection.patients, color: primary, onTap: onPatientsTap),
+              _HeaderTab(label: 'My Clients', selected: selected == TopNavSection.patients, color: primary, onTap: onPatientsTap),
               _HeaderTab(label: 'Listen', selected: selected == TopNavSection.listen, color: primary, onTap: onListenTap),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AiReferralCard extends StatelessWidget {
+  final List<AppUser.User> patients;
+  final String? selectedPatientId;
+  final ValueChanged<String?> onSelectPatient;
+  final TextEditingController controller;
+  final Future<void> Function() onSend;
+  final bool sending;
+  final String? statusText;
+
+  const _AiReferralCard({
+    required this.patients,
+    required this.selectedPatientId,
+    required this.onSelectPatient,
+    required this.controller,
+    required this.onSend,
+    required this.sending,
+    required this.statusText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final canSend = !sending && controller.text.trim().isNotEmpty && selectedPatientId != null;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: scheme.outline.withOpacity(0.15)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 44,
+                width: 44,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: scheme.primary.withOpacity(0.12),
+                ),
+                child: Icon(Icons.smart_toy_outlined, color: scheme.primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Share context with AI therapist',
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Send lessons, notes, or conversation highlights so the AI companion aligns with your guidance.',
+                      style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurface.withOpacity(0.65)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          DropdownButtonFormField<String>(
+            value: selectedPatientId,
+            items: patients
+                .map(
+                  (p) => DropdownMenuItem<String>(
+                    value: p.id,
+                    child: Text(p.fullName.isNotEmpty ? p.fullName : p.email),
+                  ),
+                )
+                .toList(),
+            onChanged: onSelectPatient,
+            decoration: InputDecoration(
+              labelText: 'Client to enrich',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: controller,
+            maxLines: 4,
+            decoration: InputDecoration(
+              labelText: 'Notes / lessons to pass on',
+              hintText: 'Key progress markers, interventions, triggers, or next steps you want the AI to respect.',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              if (statusText != null)
+                Expanded(
+                  child: Text(
+                    statusText!,
+                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurface.withOpacity(0.7)),
+                  ),
+                )
+              else
+                const SizedBox.shrink(),
+              const SizedBox(width: 12),
+              FilledButton.icon(
+                onPressed: canSend ? () => onSend() : null,
+                icon: sending
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+                      )
+                    : const Icon(Icons.send_rounded, size: 18),
+                label: Text(sending ? 'Sending...' : 'Send to AI'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -776,12 +964,15 @@ class _PatientTile extends StatelessWidget {
   final Color? blue;
   final VoidCallback? onViewDetails;
   final VoidCallback? onOpenChat;
+  final VoidCallback? onListen;
   final int unreadCount;
   const _PatientTile({
     required this.name,
     required this.lastMessage,
+    this.blue,
     this.onViewDetails,
     this.onOpenChat,
+    this.onListen,
     this.unreadCount = 0,
   });
 
@@ -855,6 +1046,15 @@ class _PatientTile extends StatelessWidget {
                       const SizedBox(width: 6),
                       _UnreadBadge(count: unreadCount),
                     ],
+                    if (onListen != null)
+                      IconButton(
+                        onPressed: onListen,
+                        icon: const Icon(Icons.graphic_eq_rounded, size: 20),
+                        color: colorScheme.secondary,
+                        padding: const EdgeInsets.all(8),
+                        constraints: const BoxConstraints(minHeight: 36, minWidth: 36),
+                        tooltip: 'Listen',
+                      ),
                     IconButton(
                       onPressed: onOpenChat,
                       icon: const Icon(Icons.chat_bubble_outline, size: 20),
@@ -1140,7 +1340,7 @@ class _UnreadBadge extends StatelessWidget {
 class _InviteTile extends StatelessWidget {
   final InvitationCode invitation;
   final VoidCallback? onDelete;
-  const _InviteTile({required this.invitation});
+  const _InviteTile({required this.invitation, this.onDelete});
 
   String _remainingText(DateTime now, DateTime expiry) {
     final diff = expiry.difference(now);
@@ -1318,7 +1518,7 @@ class _ActivePatientsCard extends StatelessWidget {
               // Title
               Expanded(
                 child: Text(
-                  'Active patients',
+                  'Active clients',
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
                     height: 1.15,
@@ -1333,8 +1533,8 @@ class _ActivePatientsCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             patients.isEmpty
-                ? 'No active patients yet. Share an invitation code to begin collaborating.'
-                : '${patients.length} patient${patients.length == 1 ? '' : 's'} connected',
+                ? 'No active clients yet. Share an invitation code to begin collaborating.'
+                : '${patients.length} client${patients.length == 1 ? '' : 's'} connected',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: scheme.onSurface.withValues(alpha: 0.55),
               height: 1.4,
@@ -1381,7 +1581,7 @@ class _ActivePatientsCard extends StatelessWidget {
                   child: TextButton.icon(
                     onPressed: onShowAll,
                     icon: const Icon(Icons.expand_more_rounded),
-                    label: const Text('Show all patients'),
+                    label: const Text('Show all clients'),
                   ),
                 ),
               ),

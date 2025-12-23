@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:flutter/material.dart';
-import 'package:therapii/foo.dart';
 import '../services/openai_trainer.dart';
 import 'package:therapii/pages/my_patients_page.dart';
 import 'package:therapii/widgets/primary_button.dart';

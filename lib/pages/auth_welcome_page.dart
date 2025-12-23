@@ -9,12 +9,13 @@ import 'package:therapii/widgets/primary_button.dart';
 import 'package:therapii/auth/firebase_auth_manager.dart';
 import 'package:therapii/services/user_service.dart';
 import 'package:therapii/pages/admin_dashboard_page.dart';
-import 'package:therapii/pages/therapist_dashboard_page.dart';
 import 'package:therapii/pages/patient_dashboard_page.dart';
 import 'package:therapii/pages/patient_onboarding_flow_page.dart';
+import 'package:therapii/pages/therapist_dashboard_page.dart';
 import 'package:therapii/pages/verify_email_page.dart';
 import 'package:therapii/services/invitation_service.dart';
 import 'package:therapii/utils/admin_access.dart';
+import 'package:therapii/pages/my_patients_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 enum AuthTab { create, login }
@@ -352,7 +353,7 @@ class _CreateAccountFormState extends State<_CreateAccountForm> {
           } else {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
-                builder: (context) => isTherapist ? const TherapistDashboardPage() : const PatientOnboardingFlowPage(),
+                builder: (context) => isTherapist ? TherapistDashboardPage() : PatientOnboardingFlowPage(),
               ),
             );
           }
@@ -447,6 +448,7 @@ class _LoginFormState extends State<_LoginForm> {
 
   static const _rememberEmailKey = 'remember_email';
   static const _rememberMeKey = 'remember_me';
+  static const _rememberRoleKey = 'remember_role';
 
   @override
   void initState() {
@@ -459,10 +461,14 @@ class _LoginFormState extends State<_LoginForm> {
       final prefs = await SharedPreferences.getInstance();
       final remembered = prefs.getBool(_rememberMeKey) ?? false;
       final email = prefs.getString(_rememberEmailKey) ?? '';
+      final roleValue = prefs.getString(_rememberRoleKey);
+      final rememberedRole =
+          roleValue == 'therapist' ? AccountRole.therapist : roleValue == 'patient' ? AccountRole.patient : null;
       if (mounted && remembered && email.isNotEmpty) {
         setState(() {
           _rememberMe = true;
           emailCtl.text = email;
+          _role = rememberedRole;
         });
       }
     } catch (e) {
@@ -476,9 +482,11 @@ class _LoginFormState extends State<_LoginForm> {
       if (_rememberMe) {
         await prefs.setBool(_rememberMeKey, true);
         await prefs.setString(_rememberEmailKey, emailCtl.text.trim());
+        await prefs.setString(_rememberRoleKey, _role == AccountRole.therapist ? 'therapist' : 'patient');
       } else {
         await prefs.remove(_rememberMeKey);
         await prefs.remove(_rememberEmailKey);
+        await prefs.remove(_rememberRoleKey);
       }
     } catch (e) {
       debugPrint('[Auth] Failed to save remembered email: $e');
@@ -565,7 +573,7 @@ class _LoginFormState extends State<_LoginForm> {
             );
           } else if (user.isTherapist) {
             Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const TherapistDashboardPage()),
+              MaterialPageRoute(builder: (context) => const MyPatientsPage()),
             );
           } else {
             final destination = user.patientOnboardingCompleted

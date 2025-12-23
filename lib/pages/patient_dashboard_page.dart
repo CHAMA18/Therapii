@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:google_fonts/google_fonts.dart';
@@ -11,17 +9,12 @@ import 'package:therapii/auth/firebase_auth_manager.dart';
 import 'package:therapii/models/invitation_code.dart';
 import 'package:therapii/models/user.dart' as app_user;
 import 'package:therapii/pages/ai_therapist_chat_page.dart';
-import 'package:therapii/pages/auth_welcome_page.dart';
-import 'package:therapii/pages/billing_page.dart';
 import 'package:therapii/pages/patient_chat_page.dart';
-import 'package:therapii/pages/patient_voice_conversation_page.dart';
-import 'package:therapii/pages/support_center_page.dart';
 import 'package:therapii/services/chat_service.dart';
 import 'package:therapii/services/invitation_service.dart';
 import 'package:therapii/services/user_service.dart';
 import 'package:therapii/theme.dart';
 import 'package:therapii/widgets/common_settings_drawer.dart';
-import 'package:therapii/widgets/dashboard_action_card.dart';
 
 class PatientDashboardPage extends StatefulWidget {
   final String? therapistId;
@@ -335,33 +328,6 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     );
   }
 
-  void _openVoiceRecording(app_user.User therapist) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => PatientVoiceConversationPage(therapist: therapist)),
-    );
-  }
-
-  Future<void> _handleMessageTap(app_user.User therapist) async {
-    final patient = _patient;
-    if (patient == null) return;
-
-    try {
-      await _chatService.ensureConversation(
-        therapistId: therapist.id,
-        patientId: patient.id,
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to open therapist messages: $error')),
-      );
-      return;
-    }
-
-    if (!mounted) return;
-    _openChat(therapist);
-  }
-
   void _showTherapistRequiredSnack() {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
@@ -536,10 +502,26 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                   final isWide = width > 600;
 
                   if (!isWide) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _ChatWithAiCard(
+                    return _ChatWithAiCard(
+                      aiHandle: aiHandle,
+                      therapistName: _therapistUser?.firstName,
+                      hasMultipleTherapists: hasMultipleTherapists,
+                      therapistProfiles: _therapistProfiles,
+                      selectedIndex: _selectedTherapistIndex,
+                      onTherapistChanged: (index) {
+                        setState(() => _selectedTherapistIndex = index);
+                      },
+                      onTap: _openAiTherapist,
+                      isDisabled: _therapistUser == null,
+                    );
+                  }
+
+                  // Tablet/Desktop Layout
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _ChatWithAiCard(
                           aiHandle: aiHandle,
                           therapistName: _therapistUser?.firstName,
                           hasMultipleTherapists: hasMultipleTherapists,
@@ -551,120 +533,10 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                           onTap: _openAiTherapist,
                           isDisabled: _therapistUser == null,
                         ),
-                        const SizedBox(height: 20),
-                        DashboardActionCard(
-                          title: 'Message Therapist',
-                          subtitle: _therapistUser != null ? 'Connected with ${_therapistUser!.firstName}' : 'Connect with your therapist',
-                          icon: Icons.chat_bubble_outline_rounded,
-                          onTap: _therapistUser == null
-                              ? _showTherapistRequiredSnack
-                              : () => _handleMessageTap(_therapistUser!),
-                          isDisabled: _therapistUser == null,
-                          isSecondary: true,
-                          actionLabel: _therapistUser == null ? 'Connect' : null,
-                        ),
-                        const SizedBox(height: 20),
-                        DashboardActionCard(
-                          title: 'Voice Session',
-                          subtitle: 'Record and share your thoughts',
-                          icon: Icons.mic_rounded,
-                          onTap: _therapistUser == null
-                              ? _showTherapistRequiredSnack
-                              : () => _openVoiceRecording(_therapistUser!),
-                          isDisabled: _therapistUser == null,
-                          actionLabel: _therapistUser == null ? 'Connect' : null,
-                        ),
-                        const SizedBox(height: 20),
-                        DashboardActionCard(
-                          title: 'Billing',
-                          subtitle: 'Manage subscription and invoices',
-                          icon: Icons.credit_card_rounded,
-                          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BillingPage())),
-                        ),
-                        const SizedBox(height: 20),
-                        DashboardActionCard(
-                          title: 'Support Center',
-                          subtitle: 'FAQs and help resources',
-                          icon: Icons.help_outline_rounded,
-                          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SupportCenterPage())),
-                        ),
-                      ],
-                    );
-                  }
-
-                  // Tablet/Desktop Layout
-                  return Column(
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _ChatWithAiCard(
-                              aiHandle: aiHandle,
-                              therapistName: _therapistUser?.firstName,
-                              hasMultipleTherapists: hasMultipleTherapists,
-                              therapistProfiles: _therapistProfiles,
-                              selectedIndex: _selectedTherapistIndex,
-                              onTherapistChanged: (index) {
-                                setState(() => _selectedTherapistIndex = index);
-                              },
-                              onTap: _openAiTherapist,
-                              isDisabled: _therapistUser == null,
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: DashboardActionCard(
-                              title: 'Message Therapist',
-                              subtitle: _therapistUser != null ? 'Connected with ${_therapistUser!.firstName}' : 'Connect with your therapist',
-                              icon: Icons.chat_bubble_outline_rounded,
-                              onTap: _therapistUser == null
-                                  ? _showTherapistRequiredSnack
-                                  : () => _handleMessageTap(_therapistUser!),
-                              isDisabled: _therapistUser == null,
-                              isSecondary: true,
-                              actionLabel: _therapistUser == null ? 'Connect' : null,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      DashboardActionCard(
-                        title: 'Voice Session',
-                        subtitle: 'Record and share your thoughts',
-                        icon: Icons.mic_rounded,
-                        onTap: _therapistUser == null
-                            ? _showTherapistRequiredSnack
-                            : () => _openVoiceRecording(_therapistUser!),
-                        isDisabled: _therapistUser == null,
-                        actionLabel: _therapistUser == null ? 'Connect' : null,
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: DashboardActionCard(
-                              title: 'Billing',
-                              subtitle: 'Manage subscription and invoices',
-                              icon: Icons.credit_card_rounded,
-                              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BillingPage())),
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: DashboardActionCard(
-                              title: 'Support Center',
-                              subtitle: 'FAQs and help resources',
-                              icon: Icons.help_outline_rounded,
-                              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SupportCenterPage())),
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   );
-                }
+                },
               ),
               
               const SizedBox(height: 48),

@@ -8,6 +8,11 @@ import 'package:therapii/pages/admin_settings_page.dart';
 import 'package:therapii/pages/auth_welcome_page.dart';
 import 'package:therapii/pages/billing_page.dart';
 import 'package:therapii/pages/edit_profile_page.dart';
+import 'package:therapii/pages/support_center_page.dart';
+import 'package:therapii/pages/therapist_details_page.dart';
+import 'package:therapii/pages/therapist_practice_personalization_page.dart';
+import 'package:therapii/pages/therapist_therapeutic_models_page.dart';
+import 'package:therapii/services/user_service.dart';
 import 'package:therapii/theme_mode_controller.dart';
 import 'package:therapii/utils/admin_access.dart';
 
@@ -42,14 +47,18 @@ class _SettingsPopupContent extends StatefulWidget {
 }
 
 class _SettingsPopupContentState extends State<_SettingsPopupContent> {
+  final _userService = UserService();
   bool _isLoadingSubscription = true;
   bool _isPaidUser = false;
   String _planName = 'Free Plan';
+  bool _isTherapist = false;
+  bool _isLoadingProfile = true;
 
   @override
   void initState() {
     super.initState();
     _fetchSubscriptionStatus();
+    _loadUserRole();
   }
 
   Future<void> _fetchSubscriptionStatus() async {
@@ -69,6 +78,26 @@ class _SettingsPopupContentState extends State<_SettingsPopupContent> {
       if (mounted) {
         setState(() => _isLoadingSubscription = false);
       }
+    }
+  }
+
+  Future<void> _loadUserRole() async {
+    final user = FirebaseAuthManager().currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _isLoadingProfile = false);
+      return;
+    }
+    try {
+      final profile = await _userService.getUser(user.uid);
+      if (mounted) {
+        setState(() {
+          _isTherapist = profile?.isTherapist ?? false;
+          _isLoadingProfile = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading user role: $e');
+      if (mounted) setState(() => _isLoadingProfile = false);
     }
   }
 
@@ -156,23 +185,25 @@ class _SettingsPopupContentState extends State<_SettingsPopupContent> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // Subscription Card
-                                  _SettingsCard(
-                                    icon: _isPaidUser ? Icons.workspace_premium_rounded : Icons.star_outline_rounded,
-                                    iconColor: _isPaidUser ? scheme.primary : scheme.tertiary,
-                                    title: _isLoadingSubscription ? 'Loading...' : _planName,
-                                    subtitle: _isLoadingSubscription
-                                        ? 'Checking subscription'
-                                        : (_isPaidUser ? 'Premium member' : 'Tap to upgrade'),
-                                    isLoading: _isLoadingSubscription,
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute(builder: (_) => const BillingPage()),
-                                      );
-                                    },
-                                  ),
-                                  const SizedBox(height: 14),
+                                  // Subscription Card (hidden for therapists)
+                                  if (!_isTherapist && !_isLoadingProfile) ...[
+                                    _SettingsCard(
+                                      icon: _isPaidUser ? Icons.workspace_premium_rounded : Icons.star_outline_rounded,
+                                      iconColor: _isPaidUser ? scheme.primary : scheme.tertiary,
+                                      title: _isLoadingSubscription ? 'Loading...' : _planName,
+                                      subtitle: _isLoadingSubscription
+                                          ? 'Checking subscription'
+                                          : (_isPaidUser ? 'Premium member' : 'Tap to upgrade'),
+                                      isLoading: _isLoadingSubscription,
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(builder: (_) => const BillingPage()),
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(height: 14),
+                                  ],
                                   // Admin section
                                   if (isAdmin) ...[
                                     _SettingsCard(
@@ -212,6 +243,58 @@ class _SettingsPopupContentState extends State<_SettingsPopupContent> {
                                       Navigator.pop(context);
                                       Navigator.of(context).push(
                                         MaterialPageRoute(builder: (_) => const EditProfilePage()),
+                                      );
+                                    },
+                                  ),
+                                  const SizedBox(height: 14),
+                                  _SettingsCard(
+                                    icon: Icons.badge_outlined,
+                                    iconColor: scheme.primary,
+                                    title: 'Practice Setup',
+                                    subtitle: 'Contact, licensure, verification',
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(builder: (_) => const TherapistDetailsPage()),
+                                      );
+                                    },
+                                  ),
+                                  const SizedBox(height: 14),
+                                  _SettingsCard(
+                                    icon: Icons.tune_rounded,
+                                    iconColor: scheme.secondary,
+                                    title: 'Personalization',
+                                    subtitle: 'Tone, phrases, engagement',
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(builder: (_) => const TherapistPracticePersonalizationPage()),
+                                      );
+                                    },
+                                  ),
+                                  const SizedBox(height: 14),
+                                  _SettingsCard(
+                                    icon: Icons.psychology_alt_outlined,
+                                    iconColor: scheme.tertiary,
+                                    title: 'Therapeutic Models',
+                                    subtitle: 'Core approaches for your practice',
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(builder: (_) => const TherapistTherapeuticModelsPage()),
+                                      );
+                                    },
+                                  ),
+                                  const SizedBox(height: 14),
+                                  _SettingsCard(
+                                    icon: Icons.help_center_rounded,
+                                    iconColor: scheme.secondary,
+                                    title: 'Support Center',
+                                    subtitle: 'FAQs and help resources',
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(builder: (_) => const SupportCenterPage()),
                                       );
                                     },
                                   ),

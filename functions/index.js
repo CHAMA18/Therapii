@@ -6,8 +6,8 @@ const { Resend } = require('resend');
 admin.initializeApp();
 
 // Resend API configuration
-const RESEND_API_KEY = process.env.RESEND_API_KEY || 're_EkWubvjF_N4qqb9JD1BHkTuNZ2acKEwD9';
-const RESEND_FROM_EMAIL = 'updates@updates.trytherapii.com';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || '';
 
 /**
  * Get Stripe instance with secret key from environment
@@ -152,7 +152,10 @@ exports.createInvitationAndSendEmail = functions.https.onCall(async (data, conte
     patientEmail,
     patientFirstName,
     patientLastName = '',
+    patientBackground = null,
   } = data;
+  const background =
+    patientBackground && typeof patientBackground === 'object' ? patientBackground : null;
 
   // Ensure the authenticated user matches the therapist ID
   if (context.auth.uid !== therapistId) {
@@ -190,6 +193,7 @@ exports.createInvitationAndSendEmail = functions.https.onCall(async (data, conte
       patient_email: patientEmail,
       patient_first_name: patientFirstName,
       patient_last_name: patientLastName,
+      ...(background ? { patient_background: background } : {}),
       is_used: false,
       created_at: now,
       expires_at: expiresAt,
@@ -199,10 +203,45 @@ exports.createInvitationAndSendEmail = functions.https.onCall(async (data, conte
     await invitationRef.set(invitation);
 
     let emailSent = false;
+    let emailWarning = null;
     
     try {
-      // Build email HTML body with professional styling
-      const emailHtml = `
+      // Resolve email configuration
+      const emailConfig = await getEmailConfig();
+      const fromEmail = (RESEND_FROM_EMAIL || emailConfig.fromEmail || '').trim();
+      const fromName = (emailConfig.fromName || 'Therapii').trim();
+      const emailEnabledFlag = emailConfig.enabled !== false;
+      const apiKey = (RESEND_API_KEY || '').trim();
+
+      const canSend =
+        emailEnabledFlag &&
+        apiKey.length > 0 &&
+        fromEmail.length > 0 &&
+        !apiKey.toLowerCase().includes('your_resend_api_key') &&
+        !apiKey.toLowerCase().includes('ekwu');
+
+      if (!emailEnabledFlag) {
+        emailWarning = 'Email delivery is disabled in admin settings.';
+      } else if (!apiKey.length) {
+        emailWarning = 'Email service is not configured (RESEND_API_KEY missing).';
+      } else if (!fromEmail.length) {
+        emailWarning = 'Email sender is not configured (RESEND_FROM_EMAIL missing).';
+      }
+
+      if (!canSend) {
+        // Log for observability but continue gracefully
+        try {
+          await admin.firestore().collection('email_errors').add({
+            type: 'email_not_configured',
+            patientEmail,
+            therapistId,
+            warning: emailWarning,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } catch (_) {}
+      } else {
+        // Build email HTML body with professional styling
+        const emailHtml = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -235,7 +274,7 @@ exports.createInvitationAndSendEmail = functions.https.onCall(async (data, conte
 </body>
 </html>`;
 
-      const emailText = `Hello ${patientFirstName},
+        const emailText = `Hello ${patientFirstName},
 
 Welcome to Therapii – we're glad to be part of your journey toward better mental well-being.
 
@@ -256,39 +295,42 @@ If you did not request this code, please ignore this email or contact us immedia
 Warm regards,
 The Therapii Team`;
 
-      // Send email using Resend API
-      const resend = new Resend(RESEND_API_KEY);
-      const { data, error } = await resend.emails.send({
-        from: `Therapii <${RESEND_FROM_EMAIL}>`,
-        to: [patientEmail],
-        subject: 'Your Unique Therapii Connection Code',
-        html: emailHtml,
-        text: emailText,
-      });
+        // Send email using Resend API
+        const resend = new Resend(apiKey);
+        const { data, error } = await resend.emails.send({
+          from: `${fromName} <${fromEmail}>`,
+          to: [patientEmail],
+          subject: 'Your Unique Therapii Connection Code',
+          html: emailHtml,
+          text: emailText,
+        });
 
-      if (error) {
-        console.error('Resend API error:', JSON.stringify(error, null, 2));
-        // Log the specific error to Firestore for debugging
-        try {
-          await admin.firestore().collection('email_errors').add({
-            type: 'resend_api_error',
-            patientEmail,
-            therapistId,
-            error: JSON.stringify(error),
-            errorName: error?.name || null,
-            errorMessage: error?.message || null,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-        } catch (logErr) {
-          console.error('Failed to log email error:', logErr);
+        if (error) {
+          console.error('Resend API error:', JSON.stringify(error, null, 2));
+          emailWarning = error?.message || 'Email service responded with an error.';
+          // Log the specific error to Firestore for debugging
+          try {
+            await admin.firestore().collection('email_errors').add({
+              type: 'resend_api_error',
+              patientEmail,
+              therapistId,
+              error: JSON.stringify(error),
+              errorName: error?.name || null,
+              errorMessage: error?.message || null,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          } catch (logErr) {
+            console.error('Failed to log email error:', logErr);
+          }
+          // Log error but don't fail - invitation is already created
+        } else {
+          emailSent = true;
+          console.log(`Email sent successfully via Resend for ${patientEmail}`, data);
         }
-        // Log error but don't fail - invitation is already created
-      } else {
-        emailSent = true;
-        console.log(`Email sent successfully via Resend for ${patientEmail}`, data);
       }
     } catch (emailError) {
       console.error('Failed to send email via Resend:', emailError?.message || emailError);
+      emailWarning = emailWarning || emailError?.message || 'Email sending failed unexpectedly.';
       // Log the catch error to Firestore for debugging
       try {
         await admin.firestore().collection('email_errors').add({
@@ -311,6 +353,7 @@ The Therapii Team`;
       success: true,
       invitationId: invitation.id,
       emailSent,
+      emailWarning,
       invitation: {
         id: invitation.id,
         code: invitation.code,
@@ -318,6 +361,7 @@ The Therapii Team`;
         patientEmail: invitation.patient_email,
         patientFirstName: invitation.patient_first_name,
         patientLastName: invitation.patient_last_name || '',
+        patientBackground: invitation.patient_background || null,
         isUsed: invitation.is_used,
         createdAt: invitation.created_at.toDate().toISOString(),
         expiresAt: invitation.expires_at.toDate().toISOString(),
