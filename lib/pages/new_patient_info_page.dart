@@ -337,8 +337,14 @@ class _NewPatientInfoPageState extends State<NewPatientInfoPage> {
                                 ),
                                 Switch(
                                   value: _offerCredits,
-                                  activeThumbColor: Colors.white,
-                                  activeTrackColor: primary,
+                                  thumbColor: MaterialStateProperty.resolveWith((states) {
+                                    if (states.contains(MaterialState.selected)) return Colors.white;
+                                    return null;
+                                  }),
+                                  trackColor: MaterialStateProperty.resolveWith((states) {
+                                    if (states.contains(MaterialState.selected)) return primary;
+                                    return null;
+                                  }),
                                   onChanged: (v) => setState(() => _offerCredits = v),
                                 ),
                               ],
