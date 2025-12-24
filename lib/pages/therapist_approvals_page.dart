@@ -435,7 +435,7 @@ class _TherapistApprovalsPageState extends State<TherapistApprovalsPage> with Si
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          initialValue: _sortMode,
+                          value: _sortMode,
                           items: const [
                             DropdownMenuItem(value: 'newest', child: Text('Newest')),
                             DropdownMenuItem(value: 'oldest', child: Text('Oldest')),

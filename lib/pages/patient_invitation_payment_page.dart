@@ -255,7 +255,7 @@ class _PatientInvitationPaymentPageState extends State<PatientInvitationPaymentP
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   DropdownButtonFormField<String>(
-                                    initialValue: _selectedState,
+                                    value: _selectedState,
                                     decoration: _inputDecoration('State'),
                                     items: _usStates
                                         .map((abbr) => DropdownMenuItem(value: abbr, child: Text(abbr)))
@@ -277,7 +277,7 @@ class _PatientInvitationPaymentPageState extends State<PatientInvitationPaymentP
                                   Expanded(
                                     flex: canFitThree ? 1 : 2,
                                     child: DropdownButtonFormField<String>(
-                                      initialValue: _selectedState,
+                                      value: _selectedState,
                                       decoration: _inputDecoration('State'),
                                       items: _usStates
                                           .map((abbr) => DropdownMenuItem(value: abbr, child: Text(abbr)))

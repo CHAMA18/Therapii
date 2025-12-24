@@ -241,7 +241,7 @@ class _PatientOnboardingFlowPageState extends State<PatientOnboardingFlowPage> {
           subtitle: 'Preferences help both your therapist and the AI respond in ways that feel useful.',
           children: [
             DropdownButtonFormField<String>(
-              initialValue: _checkInFrequency,
+              value: _checkInFrequency,
               items: const [
                 'Daily check-ins',
                 'A few times a week',
